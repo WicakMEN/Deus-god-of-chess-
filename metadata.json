@@ -1,0 +1,6 @@
+{
+  "name": "Deus Chess: Epistemic AI & God Mode",
+  "description": "An unbeatable epistemic chess engine with God Mode, probabilistic future branch calculations, cold deterministic logic, and accessible modes for casual to grandmaster play.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

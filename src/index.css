@@ -1,0 +1,67 @@
+@import "tailwindcss";
+
+@layer utilities {
+  .font-display {
+    font-family: 'Cinzel', Georgia, serif;
+  }
+}
+
+/* Mobile & PWA Optimization */
+html, body {
+  overscroll-behavior-y: none;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Battle Death VFX Keyframes */
+@keyframes glitchDissolve {
+  0% {
+    opacity: 1;
+    transform: scale(1) translate(0, 0);
+    filter: drop-shadow(0 0 10px #f59e0b);
+  }
+  25% {
+    opacity: 0.9;
+    transform: scale(1.15) translate(-4px, 2px) skewX(8deg);
+    filter: drop-shadow(0 0 16px #f43f5e) hue-rotate(60deg);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(0.95) translate(4px, -3px) skewX(-8deg);
+    filter: drop-shadow(0 0 20px #22d3ee) hue-rotate(180deg);
+  }
+  75% {
+    opacity: 0.4;
+    transform: scale(1.2) translate(-2px, 2px);
+    filter: blur(2px) hue-rotate(280deg);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.3) translate(0, 0);
+    filter: blur(8px);
+  }
+}
+
+@keyframes slashBeam {
+  0% {
+    opacity: 0;
+    transform: scale(0.4) rotate(-35deg);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.1) rotate(-35deg);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.4) rotate(-35deg);
+  }
+}
+
+.animate-glitch-dissolve {
+  animation: glitchDissolve 0.75s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+
+.animate-slash-beam {
+  animation: slashBeam 0.4s ease-out forwards;
+}
