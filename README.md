@@ -1,11 +1,18 @@
 # ♟️ Deus Chess: Epistemic AI & God Mode
 
-[![Progressive Web App](https://img.shields.io/badge/PWA-Ready%20%26%20Installable-gold?style=for-the-badge&logo=pwa)](https://github.com/)
+[![Play & Install Online](https://img.shields.io/badge/PLAY%20ONLINE-deus--chess--epistemic--ai--god--mode.ai.studio-F59E0B?style=for-the-badge&logo=googlechrome&logoColor=black)](https://deus-chess-epistemic-ai-god-mode.ai.studio)
+[![Progressive Web App](https://img.shields.io/badge/PWA-Ready%20%26%20Installable-gold?style=for-the-badge&logo=pwa)](https://deus-chess-epistemic-ai-god-mode.ai.studio)
 [![React 19](https://img.shields.io/badge/React-19.0.1-61DAFB?style=for-the-badge&logo=react)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-7.0.2-3178C6?style=for-the-badge&logo=typescript)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.3.0-646CFF?style=for-the-badge&logo=vite)](https://vitejs.dev/)
 [![Tailwind CSS v4](https://img.shields.io/badge/Tailwind_CSS-v4.3.3-38B2AC?style=for-the-badge&logo=tailwind-css)](https://tailwindcss.com/)
 [![Google Gemini API](https://img.shields.io/badge/Gemini_API-3.8_Flash-8E75C4?style=for-the-badge&logo=google)](https://ai.google.dev/)
+
+---
+
+> 🌐 **Link Langsung Main & Install di Browser (Desktop / Mobile)**:  
+> **[https://deus-chess-epistemic-ai-god-mode.ai.studio](https://deus-chess-epistemic-ai-god-mode.ai.studio)**  
+> *(Buka link di Google Chrome Android/iOS untuk langsung main atau install ke Homescreen dalam 1-klik)*
 
 ---
 
@@ -132,11 +139,19 @@ npm start
 
 ---
 
-## 📱 Panduan Install di HP Android (PWA)
+## 📱 Panduan Install di HP Android & Browser (PWA)
 
-1. Buka tautan situs aplikasi di **Google Chrome** di handphone Android Anda.
-2. Klik tombol emas **"Install di HP"** di bilah atas aplikasi, atau buka menu **titik tiga (⋮)** di pojok kanan atas browser Chrome dan pilih **"Tambahkan ke Layar Utama" / "Install Aplikasi"**.
-3. Aplikasi Deus Chess kini terpasang langsung di layar beranda (*Home Screen*) HP Anda, siap dimainkan kapan saja secara *offline*.
+Aplikasi ini dapat langsung dipasang tanpa perlu ke Google Play Store:
+
+1. **Akses Tautan Resmi**:
+   Buka **[https://deus-chess-epistemic-ai-god-mode.ai.studio](https://deus-chess-epistemic-ai-god-mode.ai.studio)** di browser **Google Chrome** di handphone Android Anda (atau browser pilihan Anda di PC/Mac).
+2. **Install 1-Klik**:
+   * **Dari Aplikasi**: Klik tombol emas berkedip **"Install di HP"** di bagian atas navigasi.
+   * **Atau Dari Menu Browser**: Ketuk menu titik tiga (**⋮**) di pojok kanan atas Chrome, lalu pilih **"Tambahkan ke Layar Utama"** (*Add to Home screen*) atau **"Install Aplikasi"**.
+3. **Nikmati Pengalaman Aplikasi Native**:
+   * Ikon Deus Chess bergaya *obsidian & gold* akan muncul di daftar aplikasi HP Anda.
+   * Berjalan *full-screen standalone* tanpa bar URL browser.
+   * Mendukung gameplay **100% Offline** berkat engine kalkulasi Minimax lokal dan *Service Worker*.
 
 ---
 
