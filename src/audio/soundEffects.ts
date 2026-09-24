@@ -199,6 +199,29 @@ class SoundController {
     osc2.stop(ctx.currentTime + 0.32);
   }
 
+  playTrapOrGambit() {
+    const ctx = this.getContext();
+    if (!ctx) return;
+
+    // Eerie, cunning ascending chord that feels like a genius trap sprang
+    const freqs = [220, 311.13, 440, 622.25]; // Diminished/tense harmonic mystery
+    freqs.forEach((freq, idx) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(freq, ctx.currentTime + idx * 0.05);
+      osc.frequency.exponentialRampToValueAtTime(freq * 1.5, ctx.currentTime + idx * 0.05 + 0.25);
+
+      gain.gain.setValueAtTime(0.18, ctx.currentTime + idx * 0.05);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + idx * 0.05 + 0.25);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(ctx.currentTime + idx * 0.05);
+      osc.stop(ctx.currentTime + idx * 0.05 + 0.25);
+    });
+  }
+
   playGameOver(victory: boolean) {
     const ctx = this.getContext();
     if (!ctx) return;

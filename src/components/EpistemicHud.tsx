@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { GameDifficulty, EpistemicEvaluation } from '../engine/chessEngine';
-import { Eye, ShieldAlert, Sparkles, Brain, Cpu, Zap, HelpCircle } from 'lucide-react';
+import { Eye, ShieldAlert, Sparkles, Brain, Cpu, Zap, HelpCircle, Activity, Flame } from 'lucide-react';
 
 interface EpistemicHudProps {
   difficulty: GameDifficulty;
@@ -19,6 +19,7 @@ interface EpistemicHudProps {
   showDivineHint: boolean;
   onToggleDivineHint: () => void;
   onAiTakeover: () => void;
+  onOpenStressTest?: () => void;
 }
 
 export const EpistemicHud: React.FC<EpistemicHudProps> = ({
@@ -33,6 +34,7 @@ export const EpistemicHud: React.FC<EpistemicHudProps> = ({
   showDivineHint,
   onToggleDivineHint,
   onAiTakeover,
+  onOpenStressTest,
 }) => {
   const [oracleQuery, setOracleQuery] = useState('');
   const [showOracleModal, setShowOracleModal] = useState(false);
@@ -41,6 +43,20 @@ export const EpistemicHud: React.FC<EpistemicHudProps> = ({
     e.preventDefault();
     await onConsultOracle(oracleQuery);
     setOracleQuery('');
+  };
+
+  const formatLargeNumber = (num?: number) => {
+    if (!num) return '0';
+    if (num >= 1_000_000_000_000) {
+      return `${(num / 1_000_000_000_000).toFixed(2)} Triliun`;
+    }
+    if (num >= 1_000_000_000) {
+      return `${(num / 1_000_000_000).toFixed(2)} Miliar`;
+    }
+    if (num >= 1_000_000) {
+      return `${(num / 1_000_000).toFixed(1)} Juta`;
+    }
+    return num.toLocaleString();
   };
 
   return (
@@ -69,14 +85,14 @@ export const EpistemicHud: React.FC<EpistemicHudProps> = ({
                 </span>
                 {isGodMode && (
                   <span className="text-[10px] font-mono text-rose-400 uppercase tracking-widest font-semibold">
-                    · MAFIK
+                    · HYPER-AGRESIF & JENIUS
                   </span>
                 )}
               </div>
               <p className="text-[11px] text-neutral-400 leading-tight">
                 {isGodMode
-                  ? 'Entitas mahatahu · Logika dingin & probabilistik mutlak'
-                  : 'Pilih tingkat kesulitan untuk permainan seimbang'}
+                  ? 'Entitas mahatahu · Taktik gila, pengorbanan kalkulatif, jebakan racun & anti-gertakan'
+                  : 'Pilih tingkat kesulitan untuk permainan catur konvensional'}
               </p>
             </div>
           </div>
@@ -94,7 +110,7 @@ export const EpistemicHud: React.FC<EpistemicHudProps> = ({
           </button>
         </div>
 
-        {/* Difficulty Selector Tabs (Single-line controls) */}
+        {/* Difficulty Selector Tabs */}
         <div className="grid grid-cols-4 gap-1 mt-3 p-1 bg-neutral-950/80 rounded-lg border border-neutral-800/80">
           {(
             [
@@ -130,19 +146,19 @@ export const EpistemicHud: React.FC<EpistemicHudProps> = ({
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5 text-xs font-semibold text-neutral-300 uppercase tracking-wider font-mono">
             <Cpu className="w-3.5 h-3.5 text-amber-400" />
-            <span>Kalkulasi Epistemic</span>
+            <span>Kalkulasi & Simulasi Mahatahu</span>
           </div>
           <span className="text-[10px] font-mono text-neutral-400">
-            {evaluation?.searchTimeMs ?? 0}ms
+            {evaluation?.searchTimeMs ?? 0}ms · {evaluation?.knps ?? 0} kN/s
           </span>
         </div>
 
-        {/* Real Metrics Grid */}
+        {/* Real Metrics Grid with Projected Universe of Moves */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-mono">
           <div className="bg-neutral-950/70 p-2 rounded-lg border border-neutral-800/50">
-            <span className="text-[10px] text-neutral-400 block">Cabang Ditelusuri</span>
-            <span className="text-neutral-100 font-semibold tabular-nums">
-              {evaluation?.nodesSearched?.toLocaleString() ?? '0'}
+            <span className="text-[10px] text-neutral-400 block">Proyeksi Kemungkinan</span>
+            <span className="text-amber-400 font-bold tabular-nums text-[11px] block truncate">
+              {formatLargeNumber(evaluation?.projectedNodes)}
             </span>
           </div>
 
@@ -154,14 +170,14 @@ export const EpistemicHud: React.FC<EpistemicHudProps> = ({
           </div>
 
           <div className="bg-neutral-950/70 p-2 rounded-lg border border-neutral-800/50">
-            <span className="text-[10px] text-neutral-400 block">Entropi Manusia</span>
-            <span className="text-neutral-100 font-semibold tabular-nums">
-              {evaluation?.boardEntropy ?? 1.0}
+            <span className="text-[10px] text-neutral-400 block">Peluang Manusia</span>
+            <span className={`font-bold tabular-nums ${evaluation && evaluation.humanWinProbability <= 1.5 ? 'text-rose-400' : 'text-neutral-200'}`}>
+              {evaluation?.humanWinProbability !== undefined ? `${evaluation.humanWinProbability.toFixed(2)}%` : '0.00%'}
             </span>
           </div>
 
           <div className="bg-neutral-950/70 p-2 rounded-lg border border-neutral-800/50">
-            <span className="text-[10px] text-neutral-400 block">Cabang Dipangkas</span>
+            <span className="text-[10px] text-neutral-400 block">Pangkasan Alpha-Beta</span>
             <span className="text-neutral-100 font-semibold tabular-nums">
               {evaluation?.branchesPruned?.toLocaleString() ?? '0'}
             </span>
@@ -172,15 +188,92 @@ export const EpistemicHud: React.FC<EpistemicHudProps> = ({
         {evaluation?.principalVariation && evaluation.principalVariation.length > 0 && (
           <div className="bg-neutral-950/80 p-2.5 rounded-lg border border-neutral-800/50">
             <span className="text-[10px] text-neutral-400 uppercase tracking-wider block font-mono mb-1">
-              Proyeksi Rangkaian Takdir (PV Line):
+              Rangkaian Prediksi Takdir Terbaik (PV Line):
             </span>
             <div className="flex flex-wrap gap-1 text-xs font-mono text-amber-300">
               {evaluation.principalVariation.map((san, idx) => (
-                <span key={idx} className="bg-neutral-900 px-1.5 py-0.5 rounded text-neutral-200">
+                <span key={idx} className="bg-neutral-900 px-1.5 py-0.5 rounded text-neutral-200 border border-neutral-800">
                   {idx % 2 === 0 ? `${Math.floor(idx / 2) + 1}.` : ''} {san}
                 </span>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* Genius Trap / Calculated Sacrifice Alert */}
+        {evaluation?.isGeniusTrap && (
+          <div className="bg-gradient-to-r from-rose-950/80 via-purple-950/50 to-rose-950/80 border border-rose-600/70 rounded-xl p-2.5 flex items-center gap-2.5 text-xs font-mono shadow-[0_0_20px_rgba(225,29,72,0.3)] animate-pulse">
+            <ShieldAlert className="w-5 h-5 text-rose-400 shrink-0" />
+            <div>
+              <span className="text-rose-300 font-bold block uppercase tracking-wider text-[10px]">
+                ⚡ JEBAKAN RACUN & PENGORBANAN TAKTIS TERDETEKSI!
+              </span>
+              <span className="text-neutral-200 text-[11px] leading-tight block">
+                Deus sengaja melepas umpan/berkorban demi membuka jalur skakmat atau mengoyak pertahanan raja Anda. Hati-hati jangan langsung memakannya!
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* Comeback Kuncian / Swindle Alert */}
+        {evaluation?.isComebackLock && (
+          <div className="bg-gradient-to-r from-amber-950/90 via-rose-950/70 to-purple-950/80 border border-amber-500/70 rounded-xl p-2.5 flex items-center gap-2.5 text-xs font-mono shadow-[0_0_20px_rgba(245,158,11,0.3)] animate-pulse">
+            <Zap className="w-5 h-5 text-amber-400 shrink-0" />
+            <div>
+              <span className="text-amber-300 font-bold block uppercase tracking-wider text-[10px]">
+                🔥 DEUS COMEBACK KUNCIAN & SWINDLE AKTIF!
+              </span>
+              <span className="text-neutral-200 text-[11px] leading-tight block">
+                Posisi kritis berhasil dibalikkan seketika. Deus mengunci tempo lawan dalam jaring takdir tak terbantahkan!
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* Chaos / Unorthodox / Anti-Troll Alert & Child-Sage Mode */}
+        {evaluation?.isChaosPlayDetected && (
+          <div className="bg-gradient-to-r from-cyan-950/90 via-purple-950/80 to-indigo-950/90 border border-cyan-500/80 rounded-xl p-2.5 flex items-center gap-2.5 text-xs font-mono shadow-[0_0_25px_rgba(6,182,212,0.3)] animate-pulse">
+            <ShieldAlert className="w-5 h-5 text-cyan-400 shrink-0" />
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-cyan-300 font-bold uppercase tracking-wider text-[10px]">
+                  🌀 RESONANSI BOCAH SAKTI BERTARING (LUDIC SYNTHESIS)
+                </span>
+                <span className="text-[9px] px-1.5 py-0.2 rounded bg-cyan-900/60 border border-cyan-700/60 text-cyan-200">
+                  Tanpa Beban
+                </span>
+              </div>
+              <span className="text-neutral-200 text-[11px] leading-tight block mt-0.5">
+                {evaluation.chaosReason || 'Lawan mencoba manuver tak lazim / pura-pura ceroboh.'}{' '}
+                <span className="text-cyan-200 font-medium">
+                  Kognitif dewa berpadu eksplorasi bocah:
+                </span>{' '}
+                Sengatan tersembunyi disingkap, umpan racun dilepeh, dan Deus melancarkan balasan bebas sambil senyum!
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* Persona Indicator Pill */}
+        {evaluation?.deusPersona && (
+          <div className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-neutral-950/90 border border-neutral-800 text-[11px] font-mono">
+            <div className="flex items-center gap-2">
+              <span className="text-neutral-400 text-[10px] uppercase">State Kognitif:</span>
+              <span
+                className={`font-bold px-2 py-0.5 rounded text-[10px] tracking-wide ${
+                  evaluation.deusPersona === 'LUDIC_CHILD'
+                    ? 'bg-cyan-950 text-cyan-300 border border-cyan-800'
+                    : 'bg-amber-950 text-amber-300 border border-amber-800'
+                }`}
+              >
+                {evaluation.deusPersona === 'LUDIC_CHILD'
+                  ? '🌀 Bocah Sakti Bertaring (Refleks Bebas)'
+                  : '⚡ Dewa Logika Epistemik (Kalkulasi Kaku)'}
+              </span>
+            </div>
+            <span className="text-[10px] text-neutral-400 hidden sm:inline">
+              {evaluation.personaMotto || 'Kognitif dewa & eksplorasi tanpa beban'}
+            </span>
           </div>
         )}
 
@@ -224,6 +317,16 @@ export const EpistemicHud: React.FC<EpistemicHudProps> = ({
             <HelpCircle className="w-3.5 h-3.5" />
             <span>Konsultasi Pikiran Tuhan</span>
           </button>
+
+          {onOpenStressTest && (
+            <button
+              onClick={onOpenStressTest}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-mono transition-all shadow-md shadow-rose-950/60 cursor-pointer font-bold ml-auto"
+            >
+              <Flame className="w-3.5 h-3.5 animate-pulse" />
+              <span>Tes Ekstrem Deus</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -248,7 +351,7 @@ export const EpistemicHud: React.FC<EpistemicHudProps> = ({
 
             <p className="text-xs text-neutral-300 leading-relaxed">
               Ajukan pertanyaan atau minta penjelasan dingin dari entitas mahatahu mengapa posisi ini
-              secara deterministik tertutup bagi harapan manusia.
+              telah terkunci dalam skenario takdir tertentu.
             </p>
 
             <form onSubmit={handleAskOracle} className="flex gap-2">
@@ -256,33 +359,29 @@ export const EpistemicHud: React.FC<EpistemicHudProps> = ({
                 type="text"
                 value={oracleQuery}
                 onChange={e => setOracleQuery(e.target.value)}
-                placeholder="cth: Mengapa langkah kuda saya tadi sia-sia?"
-                className="flex-1 bg-neutral-950 border border-neutral-800 rounded-lg px-3 py-2 text-xs font-mono text-neutral-200 placeholder:text-neutral-600 focus:outline-none focus:border-rose-500"
+                placeholder="Tanyakan analisis posisi, kelemahan taktis, atau takdir akhir..."
+                className="flex-1 bg-neutral-950 border border-neutral-700 rounded-lg px-3 py-2 text-xs text-neutral-200 placeholder-neutral-500 focus:outline-none focus:border-amber-400"
               />
               <button
                 type="submit"
                 disabled={isOracleLoading}
-                className="px-4 py-2 bg-rose-600 hover:bg-rose-500 disabled:opacity-50 text-white text-xs font-mono font-semibold rounded-lg transition-colors cursor-pointer"
+                className="px-4 py-2 bg-rose-900 hover:bg-rose-800 text-white rounded-lg text-xs font-mono disabled:opacity-50 transition cursor-pointer"
               >
                 {isOracleLoading ? 'Menghitung...' : 'Tanya'}
               </button>
             </form>
 
-            {/* Oracle Verdict Display */}
             {oracleResponse && (
-              <div className="bg-neutral-950 rounded-xl p-4 border border-neutral-800 space-y-2.5 text-xs font-mono text-neutral-200">
-                <div className="text-[11px] text-rose-400 uppercase tracking-widest font-bold">
-                  Konvergensi Takdir: {oracleResponse.inevitableFate}
+              <div className="bg-neutral-950 rounded-xl p-3 border border-neutral-800 text-xs font-mono space-y-2 max-h-60 overflow-y-auto">
+                <div className="text-amber-400 font-bold uppercase tracking-wider text-[10px]">
+                  Takdir Mutlak:
                 </div>
-                <div className="text-neutral-300 leading-relaxed whitespace-pre-wrap">
-                  {oracleResponse.analysis}
+                <div className="text-neutral-200">{oracleResponse.inevitableFate}</div>
+
+                <div className="text-neutral-400 font-bold uppercase tracking-wider text-[10px] pt-1">
+                  Bedah Posisi:
                 </div>
-                {oracleResponse.strategicFlaw && (
-                  <div className="pt-2 border-t border-neutral-900 text-neutral-400 text-[11px]">
-                    <span className="text-amber-400 font-semibold">Cacat Kognitif Terdeteksi:</span>{' '}
-                    {oracleResponse.strategicFlaw}
-                  </div>
-                )}
+                <div className="text-neutral-300">{oracleResponse.analysis}</div>
               </div>
             )}
           </div>

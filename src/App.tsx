@@ -7,6 +7,7 @@ import { EvaluationBar } from './components/EvaluationBar';
 import { MoveHistory } from './components/MoveHistory';
 import { CapturedPieces } from './components/CapturedPieces';
 import { PhilosophyModal, RulesModal } from './components/InfoModals';
+import { ExtremeStressModal } from './components/ExtremeStressModal';
 import { epistemicEngine, EpistemicEvaluation, GameDifficulty } from './engine/chessEngine';
 import { soundManager } from './audio/soundEffects';
 import { Trophy } from 'lucide-react';
@@ -48,6 +49,7 @@ export default function App() {
 
   const [showPhilosophy, setShowPhilosophy] = useState<boolean>(false);
   const [showRules, setShowRules] = useState<boolean>(false);
+  const [showStressModal, setShowStressModal] = useState<boolean>(false);
 
   // Compute captured pieces by counting pieces missing from initial army
   const computeCapturedPieces = useCallback(() => {
@@ -127,8 +129,9 @@ export default function App() {
   const triggerAiMove = useCallback(() => {
     if (chess.isGameOver()) return;
 
+    // NOW Deus begins contemplating, showing the calculation state only after user's piece has visibly settled
     setIsCalculating(true);
-    const delay = isGodMode ? 400 : 250;
+    const delay = isGodMode ? 600 : 380;
 
     setTimeout(() => {
       const evalData = epistemicEngine.evaluateAndSearch(chess, difficulty);
@@ -138,7 +141,9 @@ export default function App() {
       if (chosenMove) {
         const moveRes = chess.move(chosenMove);
         if (moveRes) {
-          if (moveRes.captured) {
+          if (evalData.isGeniusTrap) {
+            soundManager.playTrapOrGambit();
+          } else if (moveRes.captured) {
             soundManager.playSlash();
           } else if (isGodMode) {
             soundManager.playGodMove();
@@ -272,9 +277,16 @@ export default function App() {
         return true;
       }
 
-      // If normal player move against AI, trigger AI response
+      // If normal player move against AI:
+      // Allow user's piece to complete its smooth glide animation (200ms) and settle FIRST!
+      // Deus will not begin calculating until the user's piece has visibly landed.
       if (chess.turn() !== humanColor) {
-        triggerAiMove();
+        setTimeout(() => {
+          updateEvaluation();
+          triggerAiMove();
+        }, 280);
+      } else {
+        setTimeout(updateEvaluation, 50);
       }
       return true;
     } catch {
@@ -394,6 +406,34 @@ export default function App() {
       }
     } else {
       updateEvaluation();
+    }
+  };
+
+  // Muat posisi FEN dari Suite Tes Ekstrem Deus ke papan permainan
+  const handleLoadStressFen = (fen: string, title: string) => {
+    try {
+      chess.load(fen);
+      epistemicEngine.resetCache();
+      setLastMove(null);
+      setInevitableMove(null);
+      setShowDivineHint(false);
+      const newHist = chess.history();
+      setFullMoveHistory(newHist);
+      setCurrentMoveIndex(newHist.length - 1);
+      setBoardVersion(v => v + 1);
+      soundManager.playGodMove();
+      updateEvaluation();
+      setIsGodMode(true);
+      setDifficulty('GOD');
+
+      // Jika giliran AI di skenario FEN ini, biarkan AI merespon seketika
+      if (chess.turn() !== humanColor) {
+        setTimeout(() => {
+          triggerAiMove();
+        }, 300);
+      }
+    } catch (e) {
+      console.error('Gagal memuat FEN tes ekstrem', e);
     }
   };
 
@@ -523,6 +563,7 @@ export default function App() {
         }}
         onOpenRules={() => setShowRules(true)}
         onOpenPhilosophy={() => setShowPhilosophy(true)}
+        onOpenStressTest={() => setShowStressModal(true)}
         humanColor={humanColor}
         onSelectColor={handleSelectHumanColor}
         userControlsDeusFirstMove={userControlsDeusFirstMove}
@@ -560,9 +601,11 @@ export default function App() {
             <EvaluationBar
               evalCentipawns={evaluation?.evalCentipawns ?? 0}
               humanWinProbability={evaluation?.humanWinProbability ?? 50}
+              godWinProbability={evaluation?.godWinProbability ?? 50}
               isGodMode={isGodMode}
               isFlipped={isFlipped}
               isCalculating={isCalculating}
+              projectedNodes={evaluation?.projectedNodes}
             />
           </div>
 
@@ -648,6 +691,7 @@ export default function App() {
               showDivineHint={showDivineHint}
               onToggleDivineHint={() => setShowDivineHint(s => !s)}
               onAiTakeover={handleAiTakeover}
+              onOpenStressTest={() => setShowStressModal(true)}
             />
 
             {/* Move Notation & Step-by-Step History Navigation */}
@@ -667,6 +711,11 @@ export default function App() {
       {/* Modals */}
       <PhilosophyModal isOpen={showPhilosophy} onClose={() => setShowPhilosophy(false)} />
       <RulesModal isOpen={showRules} onClose={() => setShowRules(false)} />
+      <ExtremeStressModal
+        isOpen={showStressModal}
+        onClose={() => setShowStressModal(false)}
+        onLoadFen={handleLoadStressFen}
+      />
     </div>
   );
 }

@@ -10,6 +10,7 @@ import {
   ToggleRight,
   Settings,
   Check,
+  Flame,
 } from 'lucide-react';
 import { BoardTheme } from './ChessBoard';
 import { Color } from 'chess.js';
@@ -28,6 +29,7 @@ interface TopNavProps {
   onCycleTheme: () => void;
   onOpenRules: () => void;
   onOpenPhilosophy: () => void;
+  onOpenStressTest?: () => void;
   humanColor: Color;
   onSelectColor: (color: Color) => void;
   userControlsDeusFirstMove: boolean;
@@ -48,6 +50,7 @@ export const TopNav: React.FC<TopNavProps> = ({
   onCycleTheme,
   onOpenRules,
   onOpenPhilosophy,
+  onOpenStressTest,
   humanColor,
   onSelectColor,
   userControlsDeusFirstMove,
@@ -105,6 +108,15 @@ export const TopNav: React.FC<TopNavProps> = ({
         >
           Filosofi
         </button>
+        {onOpenStressTest && (
+          <button
+            onClick={onOpenStressTest}
+            className="text-rose-400 hover:text-rose-300 flex items-center gap-1.5 transition-colors cursor-pointer font-semibold"
+          >
+            <Flame className="w-4 h-4 text-rose-500 animate-pulse" />
+            <span>Tes Ekstrem</span>
+          </button>
+        )}
         <button
           onClick={onCycleTheme}
           className="text-neutral-300 hover:text-white flex items-center gap-1.5 transition-colors cursor-pointer"
