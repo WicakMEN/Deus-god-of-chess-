@@ -1,5 +1,16 @@
 import React from 'react';
-import { Volume2, VolumeX, RotateCcw, ArrowUpDown, Palette, ToggleLeft, ToggleRight, Settings, Check } from 'lucide-react';
+import {
+  Volume2,
+  VolumeX,
+  RotateCcw,
+  RotateCw,
+  ArrowUpDown,
+  Palette,
+  ToggleLeft,
+  ToggleRight,
+  Settings,
+  Check,
+} from 'lucide-react';
 import { BoardTheme } from './ChessBoard';
 import { Color } from 'chess.js';
 import { PWAInstallButton } from './PWAInstallButton';
@@ -7,6 +18,9 @@ import { PWAInstallButton } from './PWAInstallButton';
 interface TopNavProps {
   onNewGame: () => void;
   onUndo: () => void;
+  onRedo: () => void;
+  canUndo: boolean;
+  canRedo: boolean;
   onFlipBoard: () => void;
   isMuted: boolean;
   onToggleMute: () => void;
@@ -24,6 +38,9 @@ interface TopNavProps {
 export const TopNav: React.FC<TopNavProps> = ({
   onNewGame,
   onUndo,
+  onRedo,
+  canUndo,
+  canRedo,
   onFlipBoard,
   isMuted,
   onToggleMute,
@@ -66,7 +83,7 @@ export const TopNav: React.FC<TopNavProps> = ({
                 ? 'bg-amber-400 text-neutral-950 font-bold shadow-xs'
                 : 'text-neutral-400 hover:text-white'
             }`}
-            title="Anda bermain sebagai Bidak Hitam (Deus Putih)"
+            title="Anda bermain sebagai Bidak Hitam"
           >
             <div className="w-2.5 h-2.5 rounded-full bg-neutral-950 border border-neutral-600" />
             <span>Hitam</span>
@@ -74,42 +91,47 @@ export const TopNav: React.FC<TopNavProps> = ({
         </div>
       </div>
 
-      {/* Zone 2: Navigation links */}
-      <nav className="hidden lg:flex items-center gap-6 text-xs font-mono uppercase tracking-wider text-neutral-400">
-        <button
-          onClick={onOpenPhilosophy}
-          className="hover:text-amber-300 transition-colors cursor-pointer"
-        >
-          Epistemologi Kasparov
-        </button>
+      {/* Zone 2: Navigation Links (Deskripsi & Filosofi) */}
+      <nav className="hidden md:flex items-center gap-6 text-sm font-medium">
         <button
           onClick={onOpenRules}
-          className="hover:text-amber-300 transition-colors cursor-pointer"
+          className="text-neutral-300 hover:text-white transition-colors cursor-pointer"
         >
-          Aturan Catur
+          Spesifikasi
+        </button>
+        <button
+          onClick={onOpenPhilosophy}
+          className="text-neutral-300 hover:text-white transition-colors cursor-pointer"
+        >
+          Filosofi
         </button>
         <button
           onClick={onCycleTheme}
-          className="hover:text-amber-300 transition-colors cursor-pointer capitalize"
+          className="text-neutral-300 hover:text-white flex items-center gap-1.5 transition-colors cursor-pointer"
+          title={`Tema Saat Ini: ${theme}`}
         >
-          Tema: {theme}
+          <Palette className="w-4 h-4 text-amber-400" />
+          <span className="capitalize">{theme}</span>
         </button>
       </nav>
 
-      {/* Zone 3: Primary actions & Saklar First Move Deus */}
-      <div className="flex items-center gap-1.5 sm:gap-2 relative">
-        {/* SAKLAR: User Controls Deus First Move (Manual vs Auto) */}
+      {/* Zone 3: Functional Actions */}
+      <div className="flex items-center gap-2 sm:gap-2.5">
+        {/* Saklar Kontrol Langkah Pembuka Deus (Hanya muncul jika user memilih Bidak Hitam) */}
         {humanColor === 'b' && (
           <button
             onClick={onToggleUserControlsDeusFirstMove}
-            className={`px-2.5 py-1.5 rounded-lg border text-xs font-mono transition-all flex items-center gap-2 cursor-pointer ${
-              userControlsDeusFirstMove
-                ? 'bg-amber-400/20 border-amber-400 text-amber-300 shadow-[0_0_15px_rgba(245,158,11,0.2)]'
-                : 'bg-neutral-900 hover:bg-neutral-800 border-neutral-800 text-neutral-400 hover:text-white'
+            disabled={deusFirstMoveExecuted}
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-mono transition-all cursor-pointer ${
+              deusFirstMoveExecuted
+                ? 'bg-neutral-900 border-neutral-800 text-neutral-500 cursor-not-allowed opacity-60'
+                : userControlsDeusFirstMove
+                ? 'bg-amber-500/15 border-amber-500/40 text-amber-300 hover:bg-amber-500/25'
+                : 'bg-neutral-900 border-neutral-800 text-neutral-400 hover:text-white'
             }`}
             title={
               userControlsDeusFirstMove
-                ? 'Saklar AKTIF: Anda bebas klik dan jalankan bidak putih pertama Deus di papan'
+                ? 'Saklar AKTIF: Anda bebas klik atau drag bidak putih pertama Deus di papan'
                 : 'Saklar NONAKTIF: Deus langsung gerak sendiri secara otomatis dari awal'
             }
           >
@@ -121,7 +143,7 @@ export const TopNav: React.FC<TopNavProps> = ({
             <span className="hidden sm:inline">
               1st Move Deus:{' '}
               <strong className={userControlsDeusFirstMove ? 'text-amber-300' : 'text-neutral-400'}>
-                {userControlsDeusFirstMove ? 'MANUAL (Pilih di Board)' : 'AUTO'}
+                {userControlsDeusFirstMove ? 'MANUAL (Papan)' : 'AUTO'}
               </strong>
             </span>
           </button>
@@ -146,12 +168,24 @@ export const TopNav: React.FC<TopNavProps> = ({
           {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
         </button>
 
+        {/* Undo Button */}
         <button
           onClick={onUndo}
-          className="p-2 text-neutral-400 hover:text-white bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 rounded-lg transition-colors cursor-pointer"
-          title="Tarik Kembali Langkah (Undo)"
+          disabled={!canUndo}
+          className="p-2 text-neutral-400 hover:text-white bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 rounded-lg transition-colors cursor-pointer disabled:opacity-30 disabled:pointer-events-none"
+          title="Tarik Kembali Langkah (Undo / Mundur)"
         >
           <RotateCcw className="w-4 h-4" />
+        </button>
+
+        {/* Redo Button */}
+        <button
+          onClick={onRedo}
+          disabled={!canRedo}
+          className="p-2 text-neutral-400 hover:text-white bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 rounded-lg transition-colors cursor-pointer disabled:opacity-30 disabled:pointer-events-none"
+          title="Ulangi Langkah (Redo / Maju)"
+        >
+          <RotateCw className="w-4 h-4" />
         </button>
 
         <button

@@ -57,7 +57,15 @@ Saat Anda memilih bermain sebagai **Bidak Hitam** (Deus memegang Putih):
 * **Offline Capabilities**: Didukung *Service Worker* (`vite-plugin-pwa` + Workbox) yang meng-cache aset, papan, engine catur, dan audio sehingga dapat dimainkan tanpa koneksi internet.
 * **Touch Optimization**: Bebas dari *double-tap zoom*, latensi sentuh 0ms, dan *haptic sound feedback*.
 
-### 6. ✨ Visual FX & Sound Design
+### 6. 🖐️ Drag-and-Drop & Fleksibilitas Rokade (Castling)
+* **Drag-and-Drop + Click Move**: Bidak catur dapat digerakkan dengan dua cara mulus: di-klik langsung petak tujuannya atau ditarik dan dilepas (*drag and drop*) menggunakan cursor mouse maupun layar sentuh HP.
+* **Rokade Mudah (Castling King-to-Rook)**: Anda dapat melakukan rokade dengan cara standar internasional (Raja geser 2 petak) ATAU cukup klik/drag Raja langsung ke arah Benteng terkait (`e1` ke `h1`/`a1` untuk Putih, `e8` ke `h8`/`a8` untuk Hitam). Petak benteng otomatis menampilkan aura kilau emas bertuliskan `ROKADE`.
+
+### 7. ⏪ Rotasi Langkah Bolak-Balik Mulus (Undo, Redo, & Step Timeline)
+* **Undo & Redo Lengkap**: Tombol *Undo* (↶) dan *Redo* (↷) di bilah atas memungkinkan Anda memutar balik langkah maupun maju kembali secara utuh.
+* **Timeline Navigator Notasi**: Di panel notasi langkah, terdapat tombol navigasi presisi (`|◀`, `◀`, `▶`, `▶|`) untuk melompat ke awal permainan, melangkah maju/mundur per gerakan, atau langsung ke langkah terkini. Anda juga bisa mengklik teks notasi langkah mana pun (misal: `1. e4`, `3... Nf6`) untuk langsung mereview posisi papan pada saat itu.
+
+### 8. ✨ Visual FX & Sound Design
 * **Smooth Piece Gliding**: Interpolasi gerakan bidak halus menggunakan kurva *cubic-bezier*.
 * **Battle Slash & Cyber-Glitch VFX**: Efek visual tebasan pedang cahaya (*lightsaber*) dan glitch partikel saat bidak terbunuh atau skak (*check*).
 * **Board Shake**: Guncangan halus pada papan catur ketika terjadi *capture*, *God move*, atau skakmat.

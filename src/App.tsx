@@ -1,15 +1,15 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { Chess, Square, Move, PieceSymbol, Color } from 'chess.js';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { Chess, Square, PieceSymbol, Color, Move } from 'chess.js';
 import { ChessBoard, BoardTheme } from './components/ChessBoard';
-import { EvaluationBar } from './components/EvaluationBar';
-import { CapturedPieces } from './components/CapturedPieces';
-import { MoveHistory } from './components/MoveHistory';
 import { EpistemicHud } from './components/EpistemicHud';
+import { TopNav } from './components/TopNav';
+import { EvaluationBar } from './components/EvaluationBar';
+import { MoveHistory } from './components/MoveHistory';
+import { CapturedPieces } from './components/CapturedPieces';
+import { PhilosophyModal, RulesModal } from './components/InfoModals';
 import { epistemicEngine, EpistemicEvaluation, GameDifficulty } from './engine/chessEngine';
 import { soundManager } from './audio/soundEffects';
-import { TopNav } from './components/TopNav';
-import { PhilosophyModal, RulesModal } from './components/InfoModals';
-import { Trophy, AlertTriangle, ShieldCheck, RefreshCw, Zap, Eye } from 'lucide-react';
+import { Trophy } from 'lucide-react';
 
 export default function App() {
   const [chess] = useState(() => new Chess());
@@ -23,8 +23,6 @@ export default function App() {
   const [isMuted, setIsMuted] = useState<boolean>(false);
 
   // Saklar: User bebas gerakkan langkah pertama bidak putih Deus di papan beneran
-  // Jika true: Deus (Putih) diam menunggu user memilih langkah pertamanya di board
-  // Jika false: Deus auto gerak sendiri dari awal saat game dimulai
   const [userControlsDeusFirstMove, setUserControlsDeusFirstMove] = useState<boolean>(true);
   const [deusFirstMoveExecuted, setDeusFirstMoveExecuted] = useState<boolean>(false);
 
@@ -34,7 +32,10 @@ export default function App() {
   const [showDivineHint, setShowDivineHint] = useState<boolean>(false);
 
   const [evaluation, setEvaluation] = useState<EpistemicEvaluation | null>(null);
-  const [moveHistory, setMoveHistory] = useState<string[]>([]);
+
+  // Full move branch history (stores SAN moves of the main line)
+  const [fullMoveHistory, setFullMoveHistory] = useState<string[]>([]);
+  // Current active step index in history: -1 = initial starting board, 0 = move 1, etc.
   const [currentMoveIndex, setCurrentMoveIndex] = useState<number>(-1);
 
   const [oracleResponse, setOracleResponse] = useState<{
@@ -119,23 +120,21 @@ export default function App() {
 
   // Initial evaluation on mount or difficulty change
   useEffect(() => {
-    const evalData = epistemicEngine.evaluateAndSearch(chess, difficulty);
-    setEvaluation(evalData);
-  }, [chess, difficulty]);
+    updateEvaluation();
+  }, [updateEvaluation]);
 
-  // Trigger AI move (Deus Engine)
+  // Trigger AI Move
   const triggerAiMove = useCallback(() => {
     if (chess.isGameOver()) return;
 
     setIsCalculating(true);
-    const delay = isGodMode ? 280 : 200;
+    const delay = isGodMode ? 400 : 250;
 
     setTimeout(() => {
       const evalData = epistemicEngine.evaluateAndSearch(chess, difficulty);
       setEvaluation(evalData);
 
       const chosenMove = evalData.bestMoveObj;
-
       if (chosenMove) {
         const moveRes = chess.move(chosenMove);
         if (moveRes) {
@@ -151,8 +150,9 @@ export default function App() {
           }
 
           setLastMove({ from: moveRes.from as Square, to: moveRes.to as Square });
-          setMoveHistory(chess.history());
-          setCurrentMoveIndex(chess.history().length - 1);
+          const newHist = chess.history();
+          setFullMoveHistory(newHist);
+          setCurrentMoveIndex(newHist.length - 1);
           setBoardVersion(v => v + 1);
 
           // Inevitable counter-move predicted from current search's PV if available
@@ -182,18 +182,51 @@ export default function App() {
   // Status apakah kita sedang menunggu user menentukan gerakan pertama Deus Putih di papan
   const isWaitingForUserDeusMove =
     humanColor === 'b' &&
-    chess.history().length === 0 &&
+    currentMoveIndex === -1 &&
     chess.turn() === 'w' &&
     userControlsDeusFirstMove &&
     !deusFirstMoveExecuted;
 
-  // Handle Board Move (Bisa langkah pemain atau langkah pembuka pertama Deus yang digerakkan oleh user)
+  // Replay board to a specific historical step (supports both Undo, Redo, and Jump)
+  const jumpToMoveIndex = useCallback(
+    (targetIndex: number) => {
+      if (isCalculating) return;
+
+      const clampedIndex = Math.max(-1, Math.min(fullMoveHistory.length - 1, targetIndex));
+      chess.reset();
+      epistemicEngine.resetCache();
+
+      let lastExecutedMove: { from: Square; to: Square } | null = null;
+      for (let i = 0; i <= clampedIndex; i++) {
+        const san = fullMoveHistory[i];
+        const res = chess.move(san);
+        if (i === clampedIndex && res) {
+          lastExecutedMove = { from: res.from as Square, to: res.to as Square };
+        }
+      }
+
+      setCurrentMoveIndex(clampedIndex);
+      setLastMove(lastExecutedMove);
+      setBoardVersion(v => v + 1);
+      soundManager.playMove();
+      updateEvaluation();
+    },
+    [chess, fullMoveHistory, isCalculating, updateEvaluation]
+  );
+
+  // Handle Board Move (Player or First Deus Move)
   const handleMakeMove = (moveInput: { from: Square; to: Square; promotion?: PieceSymbol }) => {
     if (isCalculating || chess.isGameOver()) return false;
 
+    // If player makes a new move from an earlier historical step, prune any forward redo history
+    let activeHistory = fullMoveHistory;
+    if (currentMoveIndex < fullMoveHistory.length - 1) {
+      activeHistory = fullMoveHistory.slice(0, currentMoveIndex + 1);
+    }
+
     const isDeusFirstMoveByHuman =
       humanColor === 'b' &&
-      chess.history().length === 0 &&
+      activeHistory.length === 0 &&
       chess.turn() === 'w' &&
       userControlsDeusFirstMove &&
       !deusFirstMoveExecuted;
@@ -220,15 +253,15 @@ export default function App() {
         soundManager.playCheck();
       }
 
+      const updatedHistory = chess.history();
+      setFullMoveHistory(updatedHistory);
+      setCurrentMoveIndex(updatedHistory.length - 1);
       setLastMove({ from: moveRes.from as Square, to: moveRes.to as Square });
-      setMoveHistory(chess.history());
-      setCurrentMoveIndex(chess.history().length - 1);
       setBoardVersion(v => v + 1);
 
       if (isDeusFirstMoveByHuman) {
         setDeusFirstMoveExecuted(true);
         updateEvaluation();
-        // Sekarang giliran bidak Hitam pemain, tidak memanggil triggerAiMove
         return true;
       }
 
@@ -279,7 +312,7 @@ export default function App() {
     setLastMove(null);
     setInevitableMove(null);
     setShowDivineHint(false);
-    setMoveHistory([]);
+    setFullMoveHistory([]);
     setCurrentMoveIndex(-1);
     setOracleResponse(null);
     setDeusFirstMoveExecuted(false);
@@ -300,19 +333,39 @@ export default function App() {
     }
   };
 
-  // Undo Move
+  // Undo (Mundur 1 putaran langkah jika giliran AI, atau 1 langkah)
   const handleUndo = () => {
-    if (isCalculating) return;
-    chess.undo();
-    if (chess.turn() !== humanColor) {
-      chess.undo();
+    if (isCalculating || currentMoveIndex < 0) return;
+    // Step back 1 move; if now opponent turn and we can step back once more to player's turn, jump cleanly
+    let targetIndex = currentMoveIndex - 1;
+    if (targetIndex >= 0) {
+      // Check turn at targetIndex
+      const tempChess = new Chess();
+      for (let i = 0; i <= targetIndex; i++) {
+        tempChess.move(fullMoveHistory[i]);
+      }
+      if (tempChess.turn() !== humanColor && targetIndex > 0) {
+        targetIndex -= 1;
+      }
     }
-    setMoveHistory(chess.history());
-    setCurrentMoveIndex(chess.history().length - 1);
-    setLastMove(null);
-    setBoardVersion(v => v + 1);
-    soundManager.playMove();
-    updateEvaluation();
+    jumpToMoveIndex(targetIndex);
+  };
+
+  // Redo (Maju 1 putaran langkah ke depan)
+  const handleRedo = () => {
+    if (isCalculating || currentMoveIndex >= fullMoveHistory.length - 1) return;
+    let targetIndex = currentMoveIndex + 1;
+    // Check turn at targetIndex
+    if (targetIndex < fullMoveHistory.length - 1) {
+      const tempChess = new Chess();
+      for (let i = 0; i <= targetIndex; i++) {
+        tempChess.move(fullMoveHistory[i]);
+      }
+      if (tempChess.turn() !== humanColor) {
+        targetIndex += 1;
+      }
+    }
+    jumpToMoveIndex(targetIndex);
   };
 
   // Select player color (White or Black)
@@ -324,7 +377,7 @@ export default function App() {
     setLastMove(null);
     setInevitableMove(null);
     setShowDivineHint(false);
-    setMoveHistory([]);
+    setFullMoveHistory([]);
     setCurrentMoveIndex(-1);
     setOracleResponse(null);
     setDeusFirstMoveExecuted(false);
@@ -333,10 +386,8 @@ export default function App() {
 
     if (color === 'b') {
       if (userControlsDeusFirstMove) {
-        // Saklar ON: user bebas gerakkan bidak putih Deus di board
         updateEvaluation();
       } else {
-        // Saklar OFF: Deus auto jalan sendiri dari awal
         setTimeout(() => {
           triggerAiMove();
         }, 150);
@@ -349,21 +400,13 @@ export default function App() {
   // Flip Board
   const handleFlipBoard = () => {
     setIsFlipped(f => !f);
-    const newColor = humanColor === 'w' ? 'b' : 'w';
-    setHumanColor(newColor);
-    if (chess.turn() === newColor) {
-      // User turn
-    } else {
-      triggerAiMove();
-    }
   };
 
   // Toggle saklar first move Deus
   const handleToggleUserControlsDeusFirstMove = () => {
     setUserControlsDeusFirstMove(prev => {
       const next = !prev;
-      // Jika sekarang diubah ke OFF dan game belum jalan (posisi awal & Deus putih turn), langsung jalankan Deus
-      if (!next && humanColor === 'b' && chess.history().length === 0) {
+      if (!next && humanColor === 'b' && fullMoveHistory.length === 0) {
         setTimeout(() => triggerAiMove(), 100);
       }
       return next;
@@ -381,9 +424,10 @@ export default function App() {
         else soundManager.playMove();
         if (chess.inCheck()) soundManager.playCheck();
 
+        const updatedHistory = chess.history();
+        setFullMoveHistory(updatedHistory);
+        setCurrentMoveIndex(updatedHistory.length - 1);
         setLastMove({ from: moveRes.from as Square, to: moveRes.to as Square });
-        setMoveHistory(chess.history());
-        setCurrentMoveIndex(chess.history().length - 1);
         setBoardVersion(v => v + 1);
 
         if (!chess.isGameOver()) {
@@ -431,29 +475,25 @@ export default function App() {
   const capturedPieces = computeCapturedPieces();
   const materialDiff = computeMaterialDiff();
 
-  // Status permainan untuk modal/banner
+  // Status GameOver text
   let gameOverVerdict = '';
   if (chess.isGameOver()) {
     if (chess.isCheckmate()) {
       const winner = chess.turn() === 'w' ? 'Hitam' : 'Putih';
-      const isHumanWinner = winner === (humanColor === 'w' ? 'Putih' : 'Hitam');
-      gameOverVerdict = isHumanWinner
-        ? 'Skakmat! Secara ajaib Anda menembus kalkulasi takdir.'
-        : 'Skakmat! Pikiran Tuhan (Deus) telah menyelesaikan determinasi takdir.';
+      gameOverVerdict = `Skakmat. Pemenang: ${winner}. Kepastian absolut tercapai.`;
     } else if (chess.isDraw()) {
-      if (chess.isStalemate()) gameOverVerdict = 'Remis (Stalemate - Tidak ada langkah legal).';
-      else if (chess.isInsufficientMaterial()) gameOverVerdict = 'Remis (Materi Kurang).';
-      else if (chess.isThreefoldRepetition()) gameOverVerdict = 'Remis karena Pengulangan Posisi 3 Kali.';
-      else gameOverVerdict = 'Remis (Saling Mengunci).';
+      gameOverVerdict = 'Remis (Draw). Entropi posisi menemui keseimbangan sempurna.';
     }
   }
 
-  // Board disable rule: board can be clicked if not calculating and not game over
-  // Saat isWaitingForUserDeusMove bernilai true, user DIIJINKAN mengklik papan untuk menggerakkan bidak putih!
+  // Board disable rule: board can be interacted with if not calculating and not game over
   const isBoardDisabled =
     isCalculating ||
     chess.isGameOver() ||
     (!isWaitingForUserDeusMove && chess.turn() !== humanColor && !showDivineHint);
+
+  const canUndo = currentMoveIndex >= 0 && !isCalculating;
+  const canRedo = currentMoveIndex < fullMoveHistory.length - 1 && !isCalculating;
 
   return (
     <div
@@ -465,6 +505,9 @@ export default function App() {
       <TopNav
         onNewGame={handleNewGame}
         onUndo={handleUndo}
+        onRedo={handleRedo}
+        canUndo={canUndo}
+        canRedo={canRedo}
         onFlipBoard={handleFlipBoard}
         isMuted={isMuted}
         onToggleMute={() => {
@@ -543,7 +586,7 @@ export default function App() {
                 )}
                 {isWaitingForUserDeusMove && (
                   <span className="text-[10px] text-amber-300 bg-amber-500/20 px-2 py-0.5 rounded font-mono border border-amber-500/40">
-                    Menunggu Anda memilih 1st Move di Board
+                    Pilih/Drag 1st Move di Board
                   </span>
                 )}
               </div>
@@ -607,12 +650,12 @@ export default function App() {
               onAiTakeover={handleAiTakeover}
             />
 
-            {/* Move Notation & FEN/PGN exporter */}
-            <div className="h-60">
+            {/* Move Notation & Step-by-Step History Navigation */}
+            <div className="h-64">
               <MoveHistory
-                history={moveHistory}
+                history={fullMoveHistory}
                 currentMoveIndex={currentMoveIndex}
-                onSelectMove={() => {}}
+                onSelectMove={jumpToMoveIndex}
                 pgn={chess.pgn()}
                 fen={chess.fen()}
               />

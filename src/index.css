@@ -8,6 +8,7 @@
 
 /* Mobile & PWA Optimization */
 html, body {
+  overscroll-behavior: none;
   overscroll-behavior-y: none;
   -webkit-tap-highlight-color: transparent;
   user-select: none;
