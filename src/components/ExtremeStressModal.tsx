@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import {
   ShieldCheck,
   Play,
@@ -14,6 +14,7 @@ import {
   Layers,
   CheckCircle2,
   Clock,
+  Square,
 } from 'lucide-react';
 import {
   LOGIC_STRESS_TESTS,
@@ -37,6 +38,7 @@ export function ExtremeStressModal({ isOpen, onClose, onLoadFen }: ExtremeStress
   const [results, setResults] = useState<StressTestResult[] | null>(null);
   const [isRunning, setIsRunning] = useState(false);
   const [runningIndex, setRunningIndex] = useState<number>(-1);
+  const cancelRef = useRef(false);
 
   if (!isOpen) return null;
 
@@ -48,6 +50,7 @@ export function ExtremeStressModal({ isOpen, onClose, onLoadFen }: ExtremeStress
       : EXTREME_STRESS_TESTS;
 
   const handleRunSuite = async () => {
+    cancelRef.current = false;
     setIsRunning(true);
     setResults([]);
 
@@ -55,9 +58,11 @@ export function ExtremeStressModal({ isOpen, onClose, onLoadFen }: ExtremeStress
     const accumulated: StressTestResult[] = [];
 
     for (let i = 0; i < targetCases.length; i++) {
+      if (cancelRef.current) break;
       setRunningIndex(i);
       // Give the browser event loop a moment to render progress
       await new Promise(resolve => setTimeout(resolve, 30));
+      if (cancelRef.current) break;
       const res = runSingleStressTestCase(targetCases[i]);
       accumulated.push(res);
       setResults([...accumulated]);
@@ -65,6 +70,12 @@ export function ExtremeStressModal({ isOpen, onClose, onLoadFen }: ExtremeStress
 
     setRunningIndex(-1);
     setIsRunning(false);
+  };
+
+  const handleStopSuite = () => {
+    cancelRef.current = true;
+    setIsRunning(false);
+    setRunningIndex(-1);
   };
 
   const filteredResults = results
@@ -147,23 +158,35 @@ export function ExtremeStressModal({ isOpen, onClose, onLoadFen }: ExtremeStress
             </button>
           </div>
 
-          <button
-            onClick={handleRunSuite}
-            disabled={isRunning}
-            className="flex items-center gap-1.5 px-4 py-2 bg-rose-600 hover:bg-rose-500 disabled:opacity-50 text-white text-xs font-mono font-bold rounded-lg shadow-lg shadow-rose-900/30 transition-all cursor-pointer"
-          >
-            {isRunning ? (
-              <>
-                <RotateCcw className="w-3.5 h-3.5 animate-spin" />
-                <span>Menguji Triliunan Cabang...</span>
-              </>
-            ) : (
-              <>
-                <Play className="w-3.5 h-3.5" />
-                <span>Jalankan Dual Stress Test</span>
-              </>
+          <div className="flex items-center gap-2">
+            {isRunning && (
+              <button
+                onClick={handleStopSuite}
+                className="flex items-center gap-1.5 px-3 py-2 bg-neutral-800 hover:bg-neutral-700 text-rose-300 hover:text-rose-200 border border-neutral-700 hover:border-rose-700 text-xs font-mono font-bold rounded-lg transition-all cursor-pointer"
+                title="Hentikan pengujian"
+              >
+                <Square className="w-3 h-3 fill-current text-rose-400" />
+                <span>Stop</span>
+              </button>
             )}
-          </button>
+            <button
+              onClick={handleRunSuite}
+              disabled={isRunning}
+              className="flex items-center gap-1.5 px-4 py-2 bg-rose-600 hover:bg-rose-500 disabled:opacity-50 text-white text-xs font-mono font-bold rounded-lg shadow-lg shadow-rose-900/30 transition-all cursor-pointer"
+            >
+              {isRunning ? (
+                <>
+                  <RotateCcw className="w-3.5 h-3.5 animate-spin" />
+                  <span>Menguji Triliunan Cabang...</span>
+                </>
+              ) : (
+                <>
+                  <Play className="w-3.5 h-3.5" />
+                  <span>Jalankan Dual Stress Test</span>
+                </>
+              )}
+            </button>
+          </div>
         </div>
 
         {/* Action Header Banner */}

@@ -153,6 +153,45 @@ export const EpistemicHud: React.FC<EpistemicHudProps> = ({
           </span>
         </div>
 
+        {/* DYNAMIC SCALING ENGINE STATUS (Adaptive Depth Scaling) */}
+        {evaluation?.dynamicScaling && (
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 px-3 py-2 rounded-lg bg-neutral-950/80 border border-neutral-800/80 text-[11px] font-mono shadow-xs">
+            <div className="flex items-center gap-2">
+              <span
+                className={`w-2 h-2 rounded-full shrink-0 ${
+                  evaluation.dynamicScaling.badgeColor === 'rose'
+                    ? 'bg-rose-500 animate-ping'
+                    : evaluation.dynamicScaling.badgeColor === 'amber'
+                    ? 'bg-amber-400 animate-pulse'
+                    : evaluation.dynamicScaling.badgeColor === 'cyan'
+                    ? 'bg-cyan-400'
+                    : 'bg-emerald-400'
+                }`}
+              />
+              <span className="text-[10px] text-neutral-400 uppercase font-semibold">Engine Scaling:</span>
+              <span
+                className={`font-bold text-[10px] px-2 py-0.5 rounded tracking-wide border ${
+                  evaluation.dynamicScaling.badgeColor === 'rose'
+                    ? 'bg-rose-950/90 text-rose-300 border-rose-800/70 shadow-[0_0_10px_rgba(225,29,72,0.25)]'
+                    : evaluation.dynamicScaling.badgeColor === 'amber'
+                    ? 'bg-amber-950/90 text-amber-300 border-amber-800/70'
+                    : evaluation.dynamicScaling.badgeColor === 'cyan'
+                    ? 'bg-cyan-950/90 text-cyan-300 border-cyan-800/70'
+                    : 'bg-emerald-950/90 text-emerald-300 border-emerald-800/70'
+                }`}
+              >
+                {evaluation.dynamicScaling.badgeText}
+              </span>
+            </div>
+            <span
+              className="text-[10px] text-neutral-400 truncate max-w-xs"
+              title={evaluation.dynamicScaling.reason}
+            >
+              {evaluation.dynamicScaling.reason}
+            </span>
+          </div>
+        )}
+
         {/* Real Metrics Grid with Projected Universe of Moves */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-mono">
           <div className="bg-neutral-950/70 p-2 rounded-lg border border-neutral-800/50">
@@ -249,6 +288,26 @@ export const EpistemicHud: React.FC<EpistemicHudProps> = ({
                   Kognitif dewa berpadu eksplorasi bocah:
                 </span>{' '}
                 Sengatan tersembunyi disingkap, umpan racun dilepeh, dan Deus melancarkan balasan bebas sambil senyum!
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* Boa Constrictor Choke / Mobility Asphyxiation Alert */}
+        {evaluation?.isBoaConstrictorChoke && (
+          <div className="bg-gradient-to-r from-emerald-950/90 via-teal-950/80 to-purple-950/90 border border-emerald-500/80 rounded-xl p-2.5 flex items-center gap-2.5 text-xs font-mono shadow-[0_0_25px_rgba(16,185,129,0.25)] animate-pulse">
+            <Zap className="w-5 h-5 text-emerald-400 shrink-0" />
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-emerald-300 font-bold uppercase tracking-wider text-[10px]">
+                  🐍 STRATEGI CEKIK ASFIKSIA JENIUS (BOA CONSTRICTOR) AKTIF!
+                </span>
+                <span className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-900/60 border border-emerald-700/60 text-emerald-200">
+                  Mobilitas 0%
+                </span>
+              </div>
+              <span className="text-neutral-200 text-[11px] leading-tight block mt-0.5">
+                Deus telah mencekik ruang gerak perwira lawan hingga ke batas nol! Lawan terperangkap dalam sangkar posisional tanpa jalur serangan balik—setiap langkah hanya mempercepat jeratan leher yang mematikan.
               </span>
             </div>
           </div>
