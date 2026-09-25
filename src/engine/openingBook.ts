@@ -70,6 +70,10 @@ export const OPENING_BOOK: Record<string, string[]> = {
   'rnbqkbnr/pp1ppppp/2p5/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq -': ['d4', 'Nc3'],
   'rnbqkbnr/pp2pppp/2p5/3p4/3PP3/8/PPP2PPP/RNBQKBNR w KQkq -': ['Nc3', 'e5', 'exd5'],
 
+  // Scandinavian Defense: 1. e4 d5 2. exd5 Qxd5 3. Nc3 (Kicks Queen immediately)
+  'rnbqkbnr/ppp1pppp/8/3p4/4P3/8/PPPP1PPP/RNBQKBNR w KQkq -': ['exd5', 'Nc3', 'Nf3'],
+  'rnb1kbnr/ppp1pppp/8/3q4/8/8/PPPP1PPP/RNBQKBNR w KQkq -': ['Nc3', 'Nf3', 'd4'],
+
   // 1. d4 d5 -> Queen's Gambit 2. c4!
   'rnbqkbnr/ppp1pppp/8/3p4/3P4/8/PPP1PPPP/RNBQKBNR w KQkq -': ['c4', 'Nf3', 'Bf4'],
   // Queen's Gambit Accepted 2... dxc4 3. e4!

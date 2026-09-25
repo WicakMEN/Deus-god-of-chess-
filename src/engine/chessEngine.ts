@@ -989,6 +989,7 @@ export class EpistemicChessEngine {
     let bestMove: Move | undefined = orderedMoves[0];
     let bestPV: Move[] = [];
     const originalAlpha = alpha;
+    const originalBeta = beta;
 
     if (isMaximizing) {
       let maxEval = -Infinity;
@@ -1015,7 +1016,7 @@ export class EpistemicChessEngine {
 
       let flag: 'EXACT' | 'LOWER' | 'UPPER' = 'EXACT';
       if (maxEval <= originalAlpha) flag = 'UPPER';
-      else if (maxEval >= beta) flag = 'LOWER';
+      else if (maxEval >= originalBeta) flag = 'LOWER';
       this.tt.set(fenKey, { depth, score: maxEval, flag, bestMove });
 
       return { score: maxEval, bestMove, pv: bestPV };
@@ -1043,8 +1044,8 @@ export class EpistemicChessEngine {
       }
 
       let flag: 'EXACT' | 'LOWER' | 'UPPER' = 'EXACT';
-      if (minEval <= originalAlpha) flag = 'UPPER';
-      else if (minEval >= beta) flag = 'LOWER';
+      if (minEval >= originalBeta) flag = 'LOWER';
+      else if (minEval <= originalAlpha) flag = 'UPPER';
       this.tt.set(fenKey, { depth, score: minEval, flag, bestMove });
 
       return { score: minEval, bestMove, pv: bestPV };
@@ -1205,131 +1206,35 @@ export class EpistemicChessEngine {
       chess.undo();
     }
 
-      // ABSOLUTE MULTI-LAYERED SENTRY (Pengawal Anti-Skakmat, Anti-Umpan Beracun & Anti-Blunder Bidak):
-      // Guarantee Deus NEVER plays a move that allows immediate mate, mate in 2, hanging pieces, or unavenged blunders!
-      if (bestResult.bestMove) {
-        const evaluateMoveSafety = (cand: Move): {
-          hangsMateIn1: boolean;
-          hangsMateIn2: boolean;
-          freeMaterialLoss: number;
-          oppMateThreatCount: number;
-          landedOnUndefendedFire: boolean;
-        } => {
-          const deusColor = cand.color;
-          const oppColor = deusColor === 'w' ? 'b' : 'w';
-
+      // ABSOLUTE SENTRY: Anti-Checkmate Infallibility Guarantee
+      // Guarantees Deus NEVER plays a move that allows immediate Mate in 1!
+      // In all sound tactical positions, Deus relies completely on full-depth Minimax + Quiescence calculations.
+      if (bestResult.bestMove && !bestResult.bestMove.san.includes('#')) {
+        const hangsImmediateMate = (cand: Move): boolean => {
           chess.move(cand);
           const oppReplies = chess.moves({ verbose: true });
-
-          // 1. Immediate Mate in 1 Check
-          const mateIn1Moves = oppReplies.filter(r => r.san.includes('#'));
-          const hangsMateIn1 = mateIn1Moves.length > 0;
-
-          // 2. Forced Mate in 2 Check (Opponent gives check that forces unavoidable mate)
-          let hangsMateIn2 = false;
-          const oppChecks = oppReplies.filter(r => r.san.includes('+'));
-          for (const chk of oppChecks.slice(0, 4)) {
-            chess.move(chk);
-            const evasions = chess.moves({ verbose: true });
-            const allEvasionsLeadToMate = evasions.length > 0 && evasions.every(ev => {
-              chess.move(ev);
-              const oppMate = chess.moves().some(m => m.includes('#'));
-              chess.undo();
-              return oppMate;
-            });
-            chess.undo();
-            if (allEvasionsLeadToMate) {
-              hangsMateIn2 = true;
-              break;
-            }
-          }
-
-          // 3. Silent Mate Threat Check: Opponent moves Queen/Rook to deliver unstoppable mate in 1 next move
-          let oppMateThreatCount = 0;
-          if (!hangsMateIn1 && !hangsMateIn2) {
-            const majorQuietMoves = oppReplies.filter(r => (r.piece === 'q' || r.piece === 'r' || r.piece === 'b') && !r.captured);
-            for (const threatMove of majorQuietMoves.slice(0, 4)) {
-              chess.move(threatMove);
-              const nextMates = chess.moves().filter(m => m.includes('#'));
-              chess.undo();
-              if (nextMates.length > 0) {
-                oppMateThreatCount++;
-              }
-            }
-          }
-
-          // 4. Free Piece Hanging / Blunder Check:
-          // Check if candidate move allows opponent to capture an unavenged major/minor piece or pawn!
-          let freeMaterialLoss = 0;
-          const oppCaptures = oppReplies.filter(r => r.captured);
-          for (const cap of oppCaptures) {
-            const capVal = PIECE_VALUES[cap.captured || 'p'] || 100;
-            // Check if Deus can immediately avenge/recapture this piece
-            chess.move(cap);
-            const deusCounters = chess.moves({ verbose: true });
-            const isAvenged = deusCounters.some(
-              m => m.to === cap.to || (m.captured && (PIECE_VALUES[m.captured] || 100) >= capVal) || m.san.includes('#')
-            );
-            chess.undo();
-
-            if (!isAvenged) {
-              if (capVal > freeMaterialLoss) {
-                freeMaterialLoss = capVal;
-              }
-            }
-          }
-
-          // 5. Check if the moving piece landed on a square attacked by enemy without friendly protection
-          const candLandedOnFire =
-            chess.isAttacked(cand.to, oppColor) &&
-            !chess.isAttacked(cand.to, deusColor) &&
-            !cand.san.includes('#');
-
+          const hasMate = oppReplies.some(r => r.san.includes('#'));
           chess.undo();
-          return {
-            hangsMateIn1,
-            hangsMateIn2,
-            freeMaterialLoss,
-            oppMateThreatCount,
-            landedOnUndefendedFire: candLandedOnFire,
-          };
+          return hasMate;
         };
 
-        const currentSafety = evaluateMoveSafety(bestResult.bestMove);
-        const isCurrentUnsound =
-          currentSafety.hangsMateIn1 ||
-          currentSafety.hangsMateIn2 ||
-          currentSafety.freeMaterialLoss >= 100 ||
-          currentSafety.landedOnUndefendedFire;
-
-        if (isCurrentUnsound) {
-          // Find the best legal move that maximizes safety score
-          let bestSafeMove: Move | null = null;
-          let bestCandidateScore = -Infinity;
-
-          for (const candidate of legalMoves) {
-            const safety = evaluateMoveSafety(candidate);
-            chess.move(candidate);
-            const evalAfter = evaluateBoard(chess);
-            const baseScore = isWhiteTurn ? evalAfter : -evalAfter;
-            chess.undo();
-
-            let penalty = 0;
-            if (safety.hangsMateIn1) penalty += 50000;
-            if (safety.hangsMateIn2) penalty += 25000;
-            penalty += safety.freeMaterialLoss * 20; // 900 -> 18000, 500 -> 10000, 320 -> 6400, 100 -> 2000!
-            if (safety.landedOnUndefendedFire) penalty += (PIECE_VALUES[candidate.piece] || 100) * 15;
-            penalty += safety.oppMateThreatCount * 400;
-
-            const compositeScore = baseScore - penalty;
-            if (compositeScore > bestCandidateScore) {
-              bestCandidateScore = compositeScore;
-              bestSafeMove = candidate;
+        if (hangsImmediateMate(bestResult.bestMove)) {
+          // Candidate chosen by search hangs immediate checkmate in 1. Evasive action required!
+          const nonMatedMoves = legalMoves.filter(m => !hangsImmediateMate(m));
+          if (nonMatedMoves.length > 0) {
+            let bestEvasion: Move = nonMatedMoves[0];
+            let bestScore = -Infinity;
+            for (const evasion of nonMatedMoves) {
+              chess.move(evasion);
+              const ev = evaluateBoard(chess);
+              const score = isWhiteTurn ? ev : -ev;
+              chess.undo();
+              if (score > bestScore) {
+                bestScore = score;
+                bestEvasion = evasion;
+              }
             }
-          }
-
-          if (bestSafeMove) {
-            bestResult.bestMove = bestSafeMove;
+            bestResult.bestMove = bestEvasion;
           }
         }
       }
