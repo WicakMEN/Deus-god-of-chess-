@@ -127,29 +127,41 @@ export function computeDynamicScalingProfile(
     };
   }
 
-  // 3. TACTICAL SURGE: King in check, or very narrow forced positions (<= 12 legal moves)
-  if (inCheck || legalMoves.length <= 12) {
+  // 3. TACTICAL SURGE: King in check, or narrow forced positions (<= 14 legal moves)
+  if (inCheck || legalMoves.length <= 14) {
     return {
       tier: 'TACTICAL_SURGE',
-      label: 'Tactical Check & Sentry (Depth 3+Q3)',
-      badgeText: '🛡️ DYNAMIC: DEPTH 3 (TACTICAL SURGE)',
+      label: 'Tactical Sentry (Depth 4+Q3)',
+      badgeText: '🛡️ DYNAMIC: DEPTH 4 (TACTICAL SENTRY)',
       badgeColor: 'amber',
-      depth: 3,
+      depth: 4,
       qDepth: 3,
       reason: 'Posisi taktis tajam/skak terdeteksi. Deus mengalokasikan fokus mendalam pada jalur pembelaan dan serangan balik.',
     };
   }
 
-  // 4. FLUID MIDGAME: Dynamic middle game (16-32 pieces, > 20 legal moves)
-  // Keeps search blazing fast (~30-60ms) preserving buttery 60 FPS on all devices!
+  // 4. SHARP MIDGAME: Transition midgame (13-22 pieces)
+  if (totalPieces <= 22) {
+    return {
+      tier: 'FLUID_MIDGAME',
+      label: 'Sharp Midgame (Depth 4+Q2)',
+      badgeText: '⚔️ DYNAMIC: DEPTH 4 (SHARP MIDGAME)',
+      badgeColor: 'emerald',
+      depth: 4,
+      qDepth: 2,
+      reason: 'Pertempuran perwira aktif (≤22 bidak). Kedalaman Depth 4 mengawal perwira dan rantai bidak dari jebakan.',
+    };
+  }
+
+  // 5. FULL BOARD FLUID: Dynamic opening/early midgame (23-32 pieces)
   return {
     tier: 'FLUID_MIDGAME',
-    label: 'Fluid Midgame (Depth 3+Q2)',
-    badgeText: '🎯 DYNAMIC: DEPTH 3 (60 FPS FLUID)',
+    label: 'Fluid Early Midgame (Depth 3+Q3)',
+    badgeText: '🎯 DYNAMIC: DEPTH 3 (FLUID SENTRY)',
     badgeColor: 'emerald',
     depth: 3,
-    qDepth: 2,
-    reason: 'Papan penuh & dinamis. Kedalaman adaptif Depth 3 + Quiescence 2 menjaga performa super responsif 60 FPS tanpa drop frame.',
+    qDepth: 3,
+    reason: 'Papan penuh & dinamis. Kedalaman adaptif Depth 3 + Q3 mengawal seluruh bidak tanpa drop frame.',
   };
 }
 
@@ -487,6 +499,30 @@ export function evaluateBoard(chess: Chess): number {
           }
         }
 
+        // Tactical defense & pawn shelter check for White
+        const isDefendedByWhitePawn =
+          (r + 1 < 8 && c - 1 >= 0 && board[r + 1][c - 1]?.type === 'p' && board[r + 1][c - 1]?.color === 'w') ||
+          (r + 1 < 8 && c + 1 < 8 && board[r + 1][c + 1]?.type === 'p' && board[r + 1][c + 1]?.color === 'w');
+        const isAttackedByBlackPawn =
+          (r - 1 >= 0 && c - 1 >= 0 && board[r - 1][c - 1]?.type === 'p' && board[r - 1][c - 1]?.color === 'b') ||
+          (r - 1 >= 0 && c + 1 < 8 && board[r - 1][c + 1]?.type === 'p' && board[r - 1][c + 1]?.color === 'b');
+
+        if (isAttackedByBlackPawn && piece.type !== 'p') {
+          const attackPawnPenalty = piece.type === 'q' ? 550 : piece.type === 'r' ? 320 : 160;
+          mgWhite -= attackPawnPenalty;
+          egWhite -= attackPawnPenalty;
+        }
+
+        if (isDefendedByWhitePawn) {
+          if (piece.type === 'p') {
+            mgWhite += 16;
+            egWhite += 24;
+          } else if (piece.type === 'n' || piece.type === 'b') {
+            mgWhite += 26;
+            egWhite += 22;
+          }
+        }
+
         switch (piece.type) {
           case 'p':
             mgWhite += MG_PAWN[sq];
@@ -532,6 +568,30 @@ export function evaluateBoard(chess: Chess): number {
           const distToWhiteKing = Math.max(Math.abs(r - whiteKingRow), Math.abs(c - whiteKingCol));
           if (distToWhiteKing <= 3) {
             blackAttackWeightOnWhiteKing += (4 - distToWhiteKing) * (piece.type === 'q' ? 25 : 15);
+          }
+        }
+
+        // Tactical defense & pawn shelter check for Black
+        const isDefendedByBlackPawn =
+          (r - 1 >= 0 && c - 1 >= 0 && board[r - 1][c - 1]?.type === 'p' && board[r - 1][c - 1]?.color === 'b') ||
+          (r - 1 >= 0 && c + 1 < 8 && board[r - 1][c + 1]?.type === 'p' && board[r - 1][c + 1]?.color === 'b');
+        const isAttackedByWhitePawn =
+          (r + 1 < 8 && c - 1 >= 0 && board[r + 1][c - 1]?.type === 'p' && board[r + 1][c - 1]?.color === 'w') ||
+          (r + 1 < 8 && c + 1 < 8 && board[r + 1][c + 1]?.type === 'p' && board[r + 1][c + 1]?.color === 'w');
+
+        if (isAttackedByWhitePawn && piece.type !== 'p') {
+          const attackPawnPenalty = piece.type === 'q' ? 550 : piece.type === 'r' ? 320 : 160;
+          mgBlack -= attackPawnPenalty;
+          egBlack -= attackPawnPenalty;
+        }
+
+        if (isDefendedByBlackPawn) {
+          if (piece.type === 'p') {
+            mgBlack += 16;
+            egBlack += 24;
+          } else if (piece.type === 'n' || piece.type === 'b') {
+            mgBlack += 26;
+            egBlack += 22;
           }
         }
 
@@ -643,6 +703,24 @@ export function evaluateBoard(chess: Chess): number {
     if (blackPawnFiles[c] > 1) {
       mgBlack -= 16 * (blackPawnFiles[c] - 1);
       egBlack -= 24 * (blackPawnFiles[c] - 1);
+    }
+
+    // Isolated pawn penalties (no friendly pawns on adjacent files)
+    if (whitePawnFiles[c] > 0) {
+      const leftEmpty = c === 0 || whitePawnFiles[c - 1] === 0;
+      const rightEmpty = c === 7 || whitePawnFiles[c + 1] === 0;
+      if (leftEmpty && rightEmpty) {
+        mgWhite -= 22 * whitePawnFiles[c];
+        egWhite -= 32 * whitePawnFiles[c];
+      }
+    }
+    if (blackPawnFiles[c] > 0) {
+      const leftEmpty = c === 0 || blackPawnFiles[c - 1] === 0;
+      const rightEmpty = c === 7 || blackPawnFiles[c + 1] === 0;
+      if (leftEmpty && rightEmpty) {
+        mgBlack -= 22 * blackPawnFiles[c];
+        egBlack -= 32 * blackPawnFiles[c];
+      }
     }
   }
 
@@ -1127,15 +1205,19 @@ export class EpistemicChessEngine {
       chess.undo();
     }
 
-      // ABSOLUTE MULTI-LAYERED SENTRY (Pengawal Anti-Skakmat, Anti-Umpan Beracun & Penertiban Lawan Gila):
-      // Guarantee Deus NEVER plays a move that allows immediate mate, mate in 2, or blundering queen into a trap!
+      // ABSOLUTE MULTI-LAYERED SENTRY (Pengawal Anti-Skakmat, Anti-Umpan Beracun & Anti-Blunder Bidak):
+      // Guarantee Deus NEVER plays a move that allows immediate mate, mate in 2, hanging pieces, or unavenged blunders!
       if (bestResult.bestMove) {
         const evaluateMoveSafety = (cand: Move): {
           hangsMateIn1: boolean;
           hangsMateIn2: boolean;
-          losesQueenForFree: boolean;
+          freeMaterialLoss: number;
           oppMateThreatCount: number;
+          landedOnUndefendedFire: boolean;
         } => {
+          const deusColor = cand.color;
+          const oppColor = deusColor === 'w' ? 'b' : 'w';
+
           chess.move(cand);
           const oppReplies = chess.moves({ verbose: true });
 
@@ -1176,35 +1258,49 @@ export class EpistemicChessEngine {
             }
           }
 
-          // 4. Poisoned Piece Ambush:
-          // If candidate captures a piece/pawn, ensure it doesn't immediately lose Deus's Queen for free!
-          let losesQueenForFree = false;
-          if (cand.captured && cand.piece !== 'q') {
-            const queenWins = oppReplies.filter(r => r.captured === 'q');
-            if (queenWins.length > 0) {
-              let canSaveOrRecaptureQueen = false;
-              for (const qw of queenWins) {
-                chess.move(qw);
-                const deusCounters = chess.moves({ verbose: true });
-                const queenAvenged = deusCounters.some(m => m.captured === 'q' || m.san.includes('#'));
-                chess.undo();
-                if (queenAvenged) {
-                  canSaveOrRecaptureQueen = true;
-                  break;
-                }
-              }
-              if (!canSaveOrRecaptureQueen) {
-                losesQueenForFree = true;
+          // 4. Free Piece Hanging / Blunder Check:
+          // Check if candidate move allows opponent to capture an unavenged major/minor piece or pawn!
+          let freeMaterialLoss = 0;
+          const oppCaptures = oppReplies.filter(r => r.captured);
+          for (const cap of oppCaptures) {
+            const capVal = PIECE_VALUES[cap.captured || 'p'] || 100;
+            // Check if Deus can immediately avenge/recapture this piece
+            chess.move(cap);
+            const deusCounters = chess.moves({ verbose: true });
+            const isAvenged = deusCounters.some(
+              m => m.to === cap.to || (m.captured && (PIECE_VALUES[m.captured] || 100) >= capVal) || m.san.includes('#')
+            );
+            chess.undo();
+
+            if (!isAvenged) {
+              if (capVal > freeMaterialLoss) {
+                freeMaterialLoss = capVal;
               }
             }
           }
 
+          // 5. Check if the moving piece landed on a square attacked by enemy without friendly protection
+          const candLandedOnFire =
+            chess.isAttacked(cand.to, oppColor) &&
+            !chess.isAttacked(cand.to, deusColor) &&
+            !cand.san.includes('#');
+
           chess.undo();
-          return { hangsMateIn1, hangsMateIn2, losesQueenForFree, oppMateThreatCount };
+          return {
+            hangsMateIn1,
+            hangsMateIn2,
+            freeMaterialLoss,
+            oppMateThreatCount,
+            landedOnUndefendedFire: candLandedOnFire,
+          };
         };
 
         const currentSafety = evaluateMoveSafety(bestResult.bestMove);
-        const isCurrentUnsound = currentSafety.hangsMateIn1 || currentSafety.hangsMateIn2 || currentSafety.losesQueenForFree;
+        const isCurrentUnsound =
+          currentSafety.hangsMateIn1 ||
+          currentSafety.hangsMateIn2 ||
+          currentSafety.freeMaterialLoss >= 100 ||
+          currentSafety.landedOnUndefendedFire;
 
         if (isCurrentUnsound) {
           // Find the best legal move that maximizes safety score
@@ -1221,7 +1317,8 @@ export class EpistemicChessEngine {
             let penalty = 0;
             if (safety.hangsMateIn1) penalty += 50000;
             if (safety.hangsMateIn2) penalty += 25000;
-            if (safety.losesQueenForFree) penalty += 9000;
+            penalty += safety.freeMaterialLoss * 20; // 900 -> 18000, 500 -> 10000, 320 -> 6400, 100 -> 2000!
+            if (safety.landedOnUndefendedFire) penalty += (PIECE_VALUES[candidate.piece] || 100) * 15;
             penalty += safety.oppMateThreatCount * 400;
 
             const compositeScore = baseScore - penalty;
