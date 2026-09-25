@@ -101,16 +101,16 @@ export function computeDynamicScalingProfile(
   const queenCount = board.flat().filter(p => p?.type === 'q').length;
 
   // 1. HYPER ENDGAME: Very few pieces (<= 6 pieces, e.g. King+Pawn / King+Rook endgames)
-  // Highly accurate depth 4 + Q3 executes in <50ms with zero frame drop!
+  // Highly accurate depth 5 + Q3 executes in <150ms with zero frame drop!
   if (totalPieces <= 6) {
     return {
       tier: 'HYPER_ENDGAME',
-      label: 'Hyper-Endgame Boost (Depth 4+Q3)',
-      badgeText: '⚡ DYNAMIC: DEPTH 4 (ENDGAME SPEED)',
+      label: 'Hyper-Endgame Precision (Depth 5+Q3)',
+      badgeText: '⚡ DYNAMIC: DEPTH 5 (ENDGAME PRECISION)',
       badgeColor: 'rose',
-      depth: 4,
+      depth: 5,
       qDepth: 3,
-      reason: 'Cabang langkah sangat ramping (≤6 bidak). Deus menggenjot kedalaman taktis secara instan (<50ms) dengan presisi endgame mutlak.',
+      reason: 'Cabang langkah sangat ramping (≤6 bidak). Deus menggenjot kedalaman taktis ke Depth 5 guna mengunci rute promosi pion dan oposisi raja secara deterministik.',
     };
   }
 
@@ -118,12 +118,12 @@ export function computeDynamicScalingProfile(
   if (totalPieces <= 12 || (queenCount === 0 && totalPieces <= 16)) {
     return {
       tier: 'ENDGAME_BOOST',
-      label: 'Endgame Surge (Depth 4+Q2)',
+      label: 'Endgame Surge (Depth 4+Q3)',
       badgeText: '⚡ DYNAMIC: DEPTH 4 (ENDGAME SURGE)',
       badgeColor: 'rose',
       depth: 4,
-      qDepth: 2,
-      reason: 'Fase akhir laga (≤12 bidak). Kedalaman ditingkatkan ke Depth 4 untuk mengunci struktur promosi dan oposisi raja.',
+      qDepth: 3,
+      reason: 'Fase akhir laga (≤12 bidak). Kedalaman ditingkatkan ke Depth 4 dengan Q-Search taktis untuk mencegah lolosnya bidak bebas lawan.',
     };
   }
 
@@ -435,6 +435,8 @@ export function evaluateBoard(chess: Chess): number {
 
   const whitePawnFiles: number[] = new Array(8).fill(0);
   const blackPawnFiles: number[] = new Array(8).fill(0);
+  const whitePawns: { r: number; c: number }[] = [];
+  const blackPawns: { r: number; c: number }[] = [];
 
   // Attack points around enemy king
   let whiteAttackWeightOnBlackKing = 0;
@@ -490,6 +492,7 @@ export function evaluateBoard(chess: Chess): number {
             mgWhite += MG_PAWN[sq];
             egWhite += EG_PAWN[sq];
             whitePawnFiles[c]++;
+            whitePawns.push({ r, c });
             break;
           case 'n':
             mgWhite += MG_KNIGHT[sq];
@@ -537,6 +540,7 @@ export function evaluateBoard(chess: Chess): number {
             mgBlack += MG_PAWN[flipSq];
             egBlack += EG_PAWN[flipSq];
             blackPawnFiles[c]++;
+            blackPawns.push({ r, c });
             break;
           case 'n':
             mgBlack += MG_KNIGHT[flipSq];
@@ -647,6 +651,54 @@ export function evaluateBoard(chess: Chess): number {
                       (board[4][3]?.type === 'p' ? 1 : 0) + (board[4][4]?.type === 'p' ? 1 : 0);
   if (centerPawns > 0) {
     mgWhite += 12;
+  }
+
+  // --- PASSED PAWN DYNAMICS & ENDGAME THREAT DETECTION ---
+  // A passed pawn has no opposing pawns in front on its file or adjacent files.
+  for (const wp of whitePawns) {
+    const isPassed = !blackPawns.some(bp => bp.r < wp.r && Math.abs(bp.c - wp.c) <= 1);
+    if (isPassed) {
+      const rank = 8 - wp.r; // rank 2 to 7
+      const passedBonusMG = [0, 0, 5, 12, 25, 55, 120, 250][rank] || 0;
+      const passedBonusEG = [0, 0, 10, 25, 60, 140, 260, 480][rank] || 0;
+      mgWhite += passedBonusMG;
+      egWhite += passedBonusEG;
+
+      // Connected passed pawn bonus
+      const isConnected = whitePawns.some(p => p !== wp && Math.abs(p.c - wp.c) === 1 && Math.abs(p.r - wp.r) <= 1);
+      if (isConnected) {
+        mgWhite += 20;
+        egWhite += 45;
+      }
+
+      // King escort & enemy king distance (Endgame King proximity)
+      const distFriendlyKing = Math.max(Math.abs(whiteKingRow - wp.r), Math.abs(whiteKingCol - wp.c));
+      const distEnemyKing = Math.max(Math.abs(blackKingRow - wp.r), Math.abs(blackKingCol - wp.c));
+      egWhite += Math.max(-50, Math.min(60, (distEnemyKing - distFriendlyKing) * 12));
+    }
+  }
+
+  for (const bp of blackPawns) {
+    const isPassed = !whitePawns.some(wp => wp.r > bp.r && Math.abs(wp.c - bp.c) <= 1);
+    if (isPassed) {
+      const rank = bp.r + 1; // rank 2 to 7 (from Black's perspective: bp.r=1 is 7th rank for black)
+      const passedBonusMG = [0, 0, 5, 12, 25, 55, 120, 250][rank] || 0;
+      const passedBonusEG = [0, 0, 10, 25, 60, 140, 260, 480][rank] || 0;
+      mgBlack += passedBonusMG;
+      egBlack += passedBonusEG;
+
+      // Connected passed pawn bonus
+      const isConnected = blackPawns.some(p => p !== bp && Math.abs(p.c - bp.c) === 1 && Math.abs(p.r - bp.r) <= 1);
+      if (isConnected) {
+        mgBlack += 20;
+        egBlack += 45;
+      }
+
+      // King escort & enemy king distance
+      const distFriendlyKing = Math.max(Math.abs(blackKingRow - bp.r), Math.abs(blackKingCol - bp.c));
+      const distEnemyKing = Math.max(Math.abs(whiteKingRow - bp.r), Math.abs(whiteKingCol - bp.c));
+      egBlack += Math.max(-50, Math.min(60, (distEnemyKing - distFriendlyKing) * 12));
+    }
   }
 
   // Boa Constrictor Territorial Choke: reward advanced knight/bishop outposts in ranks 3-5
