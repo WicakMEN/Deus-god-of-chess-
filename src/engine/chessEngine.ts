@@ -17,7 +17,7 @@
 import { Chess, Move, Square, PieceSymbol } from 'chess.js';
 import { OPENING_BOOK } from './openingBook.ts';
 
-export type GameDifficulty = 'NOVICE' | 'CLUB' | 'GRANDMASTER' | 'GOD';
+export type GameDifficulty = 'NOVICE' | 'CLUB' | 'GRANDMASTER' | 'GOD' | 'STOCKFISH' | 'DEUS_EX_MACHINA';
 
 export interface EpistemicEvaluation {
   bestMove: string;
@@ -77,6 +77,30 @@ export function computeDynamicScalingProfile(
       depth: customDepth,
       qDepth: customQ,
       reason: `Kedalaman kustom ditetapkan secara manual pada level ${customDepth}.`,
+    };
+  }
+
+  if (mode === 'STOCKFISH') {
+    return {
+      tier: 'STANDARD',
+      label: 'Stockfish 10+ UCI Engine (Depth 10-14)',
+      badgeText: '⚡ STOCKFISH UCI 3500+',
+      badgeColor: 'cyan',
+      depth: 10,
+      qDepth: 3,
+      reason: 'Ditenagai oleh Stockfish WebAssembly/WebWorker Engine berstandar FIDE GM.',
+    };
+  }
+
+  if (mode === 'DEUS_EX_MACHINA') {
+    return {
+      tier: 'HYPER_ENDGAME',
+      label: 'Deus ex Machina ☠️ (Hybrid Epistemic-UCI)',
+      badgeText: '☠️ DEUS EX MACHINA (3700+ ELITE)',
+      badgeColor: 'rose',
+      depth: 12,
+      qDepth: 4,
+      reason: 'Sintesis pamungkas: Intuisi taktik gila Deus digabung dengan presisi endgame absolut Stockfish.',
     };
   }
 
@@ -140,8 +164,8 @@ export function computeDynamicScalingProfile(
     };
   }
 
-  // 4. SHARP MIDGAME: Transition midgame (13-22 pieces)
-  if (totalPieces <= 22) {
+  // 4. SHARP MIDGAME: Transition midgame (13-20 pieces)
+  if (totalPieces <= 20) {
     return {
       tier: 'FLUID_MIDGAME',
       label: 'Sharp Midgame (Depth 4+Q2)',
@@ -149,19 +173,19 @@ export function computeDynamicScalingProfile(
       badgeColor: 'emerald',
       depth: 4,
       qDepth: 2,
-      reason: 'Pertempuran perwira aktif (≤22 bidak). Kedalaman Depth 4 mengawal perwira dan rantai bidak dari jebakan.',
+      reason: 'Pertempuran perwira aktif (≤20 bidak). Kedalaman Depth 4 mengawal perwira dan rantai bidak dari jebakan.',
     };
   }
 
-  // 5. FULL BOARD FLUID: Dynamic opening/early midgame (23-32 pieces)
+  // 5. FULL BOARD FLUID: Dynamic opening/early midgame (21-32 pieces)
   return {
     tier: 'FLUID_MIDGAME',
-    label: 'Fluid Early Midgame (Depth 3+Q3)',
-    badgeText: '🎯 DYNAMIC: DEPTH 3 (FLUID SENTRY)',
+    label: 'Fluid Early Midgame (Depth 3+Q2)',
+    badgeText: '🎯 DYNAMIC: DEPTH 3 (TACTICAL MASTER)',
     badgeColor: 'emerald',
     depth: 3,
-    qDepth: 3,
-    reason: 'Papan penuh & dinamis. Kedalaman adaptif Depth 3 + Q3 mengawal seluruh bidak tanpa drop frame.',
+    qDepth: 2,
+    reason: 'Papan penuh & dinamis. Kedalaman adaptif Depth 3 + Q2 dengan pengawal perwira gantung menjaga kalkulasi taktis tajam.',
   };
 }
 
@@ -523,6 +547,24 @@ export function evaluateBoard(chess: Chess): number {
           }
         }
 
+        // Tactical defense & hanging piece guard for White minor & major pieces
+        if (piece.type !== 'p' && piece.type !== 'k') {
+          const sqStr = (String.fromCharCode(97 + c) + (8 - r)) as Square;
+          const isAttacked = chess.isAttacked(sqStr, 'b');
+          const isDefended = chess.isAttacked(sqStr, 'w');
+
+          if (isAttacked && !isDefended) {
+            // Completely hanging piece without any friendly defenders!
+            const hangPenalty = piece.type === 'q' ? 450 : piece.type === 'r' ? 260 : 160;
+            mgWhite -= hangPenalty;
+            egWhite -= hangPenalty;
+          } else if (isDefended) {
+            // Coordinated defended piece bonus
+            mgWhite += 12;
+            egWhite += 10;
+          }
+        }
+
         switch (piece.type) {
           case 'p':
             mgWhite += MG_PAWN[sq];
@@ -592,6 +634,24 @@ export function evaluateBoard(chess: Chess): number {
           } else if (piece.type === 'n' || piece.type === 'b') {
             mgBlack += 26;
             egBlack += 22;
+          }
+        }
+
+        // Tactical defense & hanging piece guard for Black minor & major pieces
+        if (piece.type !== 'p' && piece.type !== 'k') {
+          const sqStr = (String.fromCharCode(97 + c) + (8 - r)) as Square;
+          const isAttacked = chess.isAttacked(sqStr, 'w');
+          const isDefended = chess.isAttacked(sqStr, 'b');
+
+          if (isAttacked && !isDefended) {
+            // Completely hanging piece without any friendly defenders!
+            const hangPenalty = piece.type === 'q' ? 450 : piece.type === 'r' ? 260 : 160;
+            mgBlack -= hangPenalty;
+            egBlack -= hangPenalty;
+          } else if (isDefended) {
+            // Coordinated defended piece bonus
+            mgBlack += 12;
+            egBlack += 10;
           }
         }
 
@@ -724,12 +784,17 @@ export function evaluateBoard(chess: Chess): number {
     }
   }
 
-  // Center pawn control bonus
-  const centerPawns = (board[3][3]?.type === 'p' ? 1 : 0) + (board[3][4]?.type === 'p' ? 1 : 0) +
-                      (board[4][3]?.type === 'p' ? 1 : 0) + (board[4][4]?.type === 'p' ? 1 : 0);
-  if (centerPawns > 0) {
-    mgWhite += 12;
-  }
+  // Center pawn control bonus (symmetric for White and Black)
+  const whiteCenterPawns = (board[3][3]?.type === 'p' && board[3][3]?.color === 'w' ? 1 : 0) +
+                           (board[3][4]?.type === 'p' && board[3][4]?.color === 'w' ? 1 : 0) +
+                           (board[4][3]?.type === 'p' && board[4][3]?.color === 'w' ? 1 : 0) +
+                           (board[4][4]?.type === 'p' && board[4][4]?.color === 'w' ? 1 : 0);
+  const blackCenterPawns = (board[3][3]?.type === 'p' && board[3][3]?.color === 'b' ? 1 : 0) +
+                           (board[3][4]?.type === 'p' && board[3][4]?.color === 'b' ? 1 : 0) +
+                           (board[4][3]?.type === 'p' && board[4][3]?.color === 'b' ? 1 : 0) +
+                           (board[4][4]?.type === 'p' && board[4][4]?.color === 'b' ? 1 : 0);
+  mgWhite += whiteCenterPawns * 14;
+  mgBlack += blackCenterPawns * 14;
 
   // --- PASSED PAWN DYNAMICS & ENDGAME THREAT DETECTION ---
   // A passed pawn has no opposing pawns in front on its file or adjacent files.
@@ -1098,18 +1163,8 @@ export class EpistemicChessEngine {
     const cleanFen = chess.fen().split(' ').slice(0, 4).join(' ');
     const bookCandidates = OPENING_BOOK[cleanFen];
     if (bookCandidates && bookCandidates.length > 0) {
-      // In GOD Mode, prefer hyper-aggressive moves from the book (gambit pawns & knight attacks)
-      let selectedSan = bookCandidates[0];
-      if (mode === 'GOD') {
-        const aggressiveGambits = bookCandidates.filter(san => ['f4', 'b4', 'c3', 'c4', 'Ng5', 'Nxf7', 'd4', 'e5'].includes(san));
-        if (aggressiveGambits.length > 0) {
-          selectedSan = aggressiveGambits[Math.floor(Math.random() * aggressiveGambits.length)];
-        } else {
-          selectedSan = bookCandidates[Math.floor(Math.random() * bookCandidates.length)];
-        }
-      } else {
-        selectedSan = bookCandidates[Math.floor(Math.random() * bookCandidates.length)];
-      }
+      // In GOD or DEUS_EX_MACHINA Mode, execute the highest theoretical mainline move (world-class Grandmaster theory)
+      const selectedSan = (mode === 'GOD' || mode === 'DEUS_EX_MACHINA') ? bookCandidates[0] : bookCandidates[Math.floor(Math.random() * bookCandidates.length)];
 
       const matchedMove = legalMoves.find(m => m.san === selectedSan);
       if (matchedMove) {
@@ -1118,8 +1173,8 @@ export class EpistemicChessEngine {
 
         const whiteChance = 1 / (1 + Math.pow(10, -staticScore / 380));
         let humanChance = isWhiteTurn ? (1 - whiteChance) : whiteChance;
-        if (mode === 'GOD') {
-          humanChance = Math.min(humanChance * 0.12, 1.25);
+        if (mode === 'GOD' || mode === 'DEUS_EX_MACHINA') {
+          humanChance = Math.min(humanChance * (mode === 'DEUS_EX_MACHINA' ? 0.05 : 0.12), 0.99);
         }
 
         const humanWinPercent = Math.max(0.01, Math.min(99.99, Math.round(humanChance * 10000) / 100));
@@ -1315,7 +1370,11 @@ export class EpistemicChessEngine {
     let coldThought = '';
     const bestSan = bestResult.bestMove?.san || '';
 
-    if (mode === 'GOD') {
+    if (mode === 'DEUS_EX_MACHINA') {
+      coldThought = isGeniusTrapIdentified
+        ? `[DEUS EX MACHINA ☠️] SINTESIS MONSTER: Stockfish mengunci varian tanpa cela dan Deus menanam umpan mematikan (${bestSan})! Kehancuran lawan adalah kepastian matematis.`
+        : `[DEUS EX MACHINA ☠️] Protokol Hibrida: Taktik jenius pengorbanan Deus + Kedalaman komputasi mesin 3700+ ELO. Langkah ${bestSan} menghapus segala harapan counter-play.`;
+    } else if (mode === 'GOD') {
       if (currentDeusAdvantage > 20000) {
         coldThought = `Skakmat deterministik tak terhindarkan. Seluruh ${projectedNodes.toLocaleString()} cabang proyeksi berakhir dengan kekalahan lawan.`;
       } else if (currentDeusAdvantage < -20000) {

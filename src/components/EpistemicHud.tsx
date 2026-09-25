@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { GameDifficulty, EpistemicEvaluation } from '../engine/chessEngine';
-import { Eye, ShieldAlert, Sparkles, Brain, Cpu, Zap, HelpCircle, Activity, Flame } from 'lucide-react';
+import { ActiveEngine } from './TopNav';
+import { Eye, ShieldAlert, Sparkles, Brain, Cpu, Zap, HelpCircle, Activity, Flame, Bot } from 'lucide-react';
 
 interface EpistemicHudProps {
   difficulty: GameDifficulty;
@@ -20,6 +21,8 @@ interface EpistemicHudProps {
   onToggleDivineHint: () => void;
   onAiTakeover: () => void;
   onOpenStressTest?: () => void;
+  activeEngine?: ActiveEngine;
+  onSelectEngine?: (e: ActiveEngine) => void;
 }
 
 export const EpistemicHud: React.FC<EpistemicHudProps> = ({
@@ -35,6 +38,8 @@ export const EpistemicHud: React.FC<EpistemicHudProps> = ({
   onToggleDivineHint,
   onAiTakeover,
   onOpenStressTest,
+  activeEngine = 'STOCKFISH',
+  onSelectEngine,
 }) => {
   const [oracleQuery, setOracleQuery] = useState('');
   const [showOracleModal, setShowOracleModal] = useState(false);
@@ -61,10 +66,12 @@ export const EpistemicHud: React.FC<EpistemicHudProps> = ({
 
   return (
     <div className="flex flex-col gap-3 h-full">
-      {/* GOD MODE HERO OVERRIDE BANNER */}
+      {/* GOD MODE / STOCKFISH HERO OVERRIDE BANNER */}
       <div
         className={`relative overflow-hidden rounded-xl p-3.5 transition-all duration-300 border ${
-          isGodMode
+          difficulty === 'STOCKFISH'
+            ? 'bg-neutral-950 border-cyan-900/60 shadow-[0_0_25px_rgba(6,182,212,0.15)]'
+            : isGodMode
             ? 'bg-neutral-950 border-rose-900/60 shadow-[0_0_25px_rgba(225,29,72,0.12)]'
             : 'bg-neutral-900/80 border-neutral-800'
         }`}
@@ -73,24 +80,44 @@ export const EpistemicHud: React.FC<EpistemicHudProps> = ({
           <div className="flex items-center gap-2.5">
             <div
               className={`w-9 h-9 rounded-lg flex items-center justify-center transition-colors ${
-                isGodMode ? 'bg-rose-950/70 text-rose-400 ring-1 ring-rose-700/60' : 'bg-neutral-800 text-neutral-400'
+                difficulty === 'STOCKFISH'
+                  ? 'bg-cyan-950/70 text-cyan-400 ring-1 ring-cyan-700/60'
+                  : isGodMode
+                  ? 'bg-rose-950/70 text-rose-400 ring-1 ring-rose-700/60'
+                  : 'bg-neutral-800 text-neutral-400'
               }`}
             >
-              {isGodMode ? <Eye className="w-5 h-5 animate-pulse" /> : <Brain className="w-5 h-5" />}
+              {difficulty === 'STOCKFISH' ? (
+                <Cpu className="w-5 h-5 text-cyan-400 animate-pulse" />
+              ) : isGodMode ? (
+                <Eye className="w-5 h-5 animate-pulse" />
+              ) : (
+                <Brain className="w-5 h-5" />
+              )}
             </div>
             <div>
               <div className="flex items-center gap-1.5">
                 <span className="text-xs font-bold tracking-wider font-display uppercase text-white">
-                  {isGodMode ? 'MODE DEUS (GOD MODE)' : 'Mode Catur'}
+                  {difficulty === 'STOCKFISH'
+                    ? 'STOCKFISH 10+ UCI'
+                    : isGodMode
+                    ? 'MODE DEUS (GOD MODE)'
+                    : 'Mode Catur'}
                 </span>
-                {isGodMode && (
+                {difficulty === 'STOCKFISH' ? (
+                  <span className="text-[10px] font-mono text-cyan-400 uppercase tracking-widest font-semibold">
+                    · ELO 3500+ UCI
+                  </span>
+                ) : isGodMode ? (
                   <span className="text-[10px] font-mono text-rose-400 uppercase tracking-widest font-semibold">
                     · HYPER-AGRESIF & JENIUS
                   </span>
-                )}
+                ) : null}
               </div>
               <p className="text-[11px] text-neutral-400 leading-tight">
-                {isGodMode
+                {difficulty === 'STOCKFISH'
+                  ? 'Mesin catur nomor 1 dunia via Web Worker · Kalkulasi ribuan-jutaan cabang taktis'
+                  : isGodMode
                   ? 'Entitas mahatahu · Taktik gila, pengorbanan kalkulatif, jebakan racun & anti-gertakan'
                   : 'Pilih tingkat kesulitan untuk permainan catur konvensional'}
               </p>
@@ -111,13 +138,15 @@ export const EpistemicHud: React.FC<EpistemicHudProps> = ({
         </div>
 
         {/* Difficulty Selector Tabs */}
-        <div className="grid grid-cols-4 gap-1 mt-3 p-1 bg-neutral-950/80 rounded-lg border border-neutral-800/80">
+        <div className="grid grid-cols-2 sm:grid-cols-6 gap-1 mt-3 p-1 bg-neutral-950/80 rounded-lg border border-neutral-800/80">
           {(
             [
               { key: 'NOVICE', label: 'Pemula', elo: '900' },
               { key: 'CLUB', label: 'Klub', elo: '1600' },
               { key: 'GRANDMASTER', label: 'GM', elo: '2500' },
               { key: 'GOD', label: 'DEUS', elo: '3500+' },
+              { key: 'STOCKFISH', label: 'Stockfish', elo: '3500+ UCI' },
+              { key: 'DEUS_EX_MACHINA', label: 'Machina ☠️', elo: '3700+ ELITE' },
             ] as const
           ).map(tab => {
             const isActive = difficulty === tab.key;
@@ -127,8 +156,12 @@ export const EpistemicHud: React.FC<EpistemicHudProps> = ({
                 onClick={() => onSelectDifficulty(tab.key)}
                 className={`py-1.5 px-2 text-center rounded-md transition-colors cursor-pointer text-xs font-mono whitespace-nowrap ${
                   isActive
-                    ? tab.key === 'GOD'
+                    ? tab.key === 'DEUS_EX_MACHINA'
+                      ? 'bg-purple-950/90 text-purple-200 border border-purple-700/80 font-bold shadow-xs shadow-purple-900/40'
+                      : tab.key === 'GOD'
                       ? 'bg-rose-950/80 text-rose-200 border border-rose-800/60 font-bold shadow-xs'
+                      : tab.key === 'STOCKFISH'
+                      ? 'bg-cyan-950/80 text-cyan-200 border border-cyan-800/60 font-bold shadow-xs'
                       : 'bg-neutral-800 text-amber-300 font-semibold shadow-xs'
                     : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-900'
                 }`}
@@ -139,6 +172,54 @@ export const EpistemicHud: React.FC<EpistemicHudProps> = ({
             );
           })}
         </div>
+
+        {/* Engine Selection Bar */}
+        {onSelectEngine && (
+          <div className="flex items-center justify-between mt-2.5 pt-2.5 border-t border-neutral-800/80 text-xs font-mono">
+            <span className="text-[11px] text-neutral-400 font-medium flex items-center gap-1.5">
+              {activeEngine === 'DEUS_EX_MACHINA' ? (
+                <span className="text-purple-400 text-xs">☠️</span>
+              ) : activeEngine === 'STOCKFISH' ? (
+                <Bot className="w-3.5 h-3.5 text-emerald-400" />
+              ) : (
+                <Cpu className="w-3.5 h-3.5 text-amber-400" />
+              )}
+              <span>Mesin Engine:</span>
+            </span>
+            <div className="flex items-center gap-1 bg-neutral-950/90 p-0.5 rounded-lg border border-neutral-800">
+              <button
+                onClick={() => onSelectEngine('DEUS_EX_MACHINA')}
+                className={`px-2 py-0.5 rounded text-[11px] font-semibold transition-all cursor-pointer ${
+                  activeEngine === 'DEUS_EX_MACHINA'
+                    ? 'bg-purple-600 text-white font-bold shadow-xs'
+                    : 'text-purple-300 hover:text-white'
+                }`}
+              >
+                Machina ☠️
+              </button>
+              <button
+                onClick={() => onSelectEngine('STOCKFISH')}
+                className={`px-2 py-0.5 rounded text-[11px] font-semibold transition-all cursor-pointer ${
+                  activeEngine === 'STOCKFISH'
+                    ? 'bg-emerald-500 text-neutral-950 font-bold shadow-xs'
+                    : 'text-neutral-400 hover:text-neutral-200'
+                }`}
+              >
+                Stockfish UCI
+              </button>
+              <button
+                onClick={() => onSelectEngine('DEUS')}
+                className={`px-2 py-0.5 rounded text-[11px] font-semibold transition-all cursor-pointer ${
+                  activeEngine === 'DEUS'
+                    ? 'bg-amber-400 text-neutral-950 font-bold shadow-xs'
+                    : 'text-neutral-400 hover:text-neutral-200'
+                }`}
+              >
+                Deus AI
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* EPISTEMIC TELEMETRY PANEL */}

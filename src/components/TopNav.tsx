@@ -11,10 +11,15 @@ import {
   Settings,
   Check,
   Flame,
+  Bot,
+  Cpu,
+  Swords,
 } from 'lucide-react';
 import { BoardTheme } from './ChessBoard';
 import { Color } from 'chess.js';
 import { PWAInstallButton } from './PWAInstallButton';
+
+export type ActiveEngine = 'DEUS' | 'STOCKFISH' | 'DEUS_EX_MACHINA';
 
 interface TopNavProps {
   onNewGame: () => void;
@@ -30,11 +35,14 @@ interface TopNavProps {
   onOpenRules: () => void;
   onOpenPhilosophy: () => void;
   onOpenStressTest?: () => void;
+  onScrollToArena?: () => void;
   humanColor: Color;
   onSelectColor: (color: Color) => void;
   userControlsDeusFirstMove: boolean;
   onToggleUserControlsDeusFirstMove: () => void;
   deusFirstMoveExecuted: boolean;
+  activeEngine: ActiveEngine;
+  onSelectEngine: (engine: ActiveEngine) => void;
 }
 
 export const TopNav: React.FC<TopNavProps> = ({
@@ -51,19 +59,64 @@ export const TopNav: React.FC<TopNavProps> = ({
   onOpenRules,
   onOpenPhilosophy,
   onOpenStressTest,
+  onScrollToArena,
   humanColor,
   onSelectColor,
   userControlsDeusFirstMove,
   onToggleUserControlsDeusFirstMove,
   deusFirstMoveExecuted,
+  activeEngine,
+  onSelectEngine,
 }) => {
   return (
     <header className="flex items-center justify-between px-3 sm:px-8 py-3.5 border-b border-neutral-800 bg-neutral-950/90 backdrop-blur-md sticky top-0 z-40">
-      {/* Zone 1: Single text element wordmark & Color Selector */}
-      <div className="flex items-center gap-3">
+      {/* Zone 1: Single text element wordmark, Color Selector, & Engine Selector */}
+      <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
         <span className="text-base sm:text-xl font-bold tracking-tight text-white font-display select-none">
           Deus Chess
         </span>
+
+        {/* Engine Switcher (Deus ex Machina vs Stockfish vs Deus AI) */}
+        <div className="flex items-center bg-neutral-900 border border-neutral-800 rounded-lg p-0.5 text-xs font-mono">
+          <button
+            onClick={() => onSelectEngine('DEUS_EX_MACHINA')}
+            className={`px-2 py-1 rounded flex items-center gap-1 transition-all cursor-pointer ${
+              activeEngine === 'DEUS_EX_MACHINA'
+                ? 'bg-purple-500 text-white font-bold shadow-xs shadow-purple-900/50'
+                : 'text-purple-300 hover:text-white'
+            }`}
+            title="Deus ex Machina ☠️ (Sintesis Deus + Stockfish - 3700+ ELO)"
+          >
+            <span>☠️</span>
+            <span className="hidden sm:inline">Machina</span>
+          </button>
+          <button
+            onClick={() => onSelectEngine('STOCKFISH')}
+            className={`px-2 py-1 rounded flex items-center gap-1.5 transition-all cursor-pointer ${
+              activeEngine === 'STOCKFISH'
+                ? 'bg-emerald-500 text-neutral-950 font-bold shadow-xs'
+                : 'text-neutral-400 hover:text-white'
+            }`}
+            title="Stockfish 10 UCI WebWorker (FIDE ~3500 Elo)"
+          >
+            <Bot className="w-3.5 h-3.5" />
+            <span className="hidden xs:inline">Stockfish</span>
+            <span className="xs:hidden">SF</span>
+          </button>
+          <button
+            onClick={() => onSelectEngine('DEUS')}
+            className={`px-2 py-1 rounded flex items-center gap-1.5 transition-all cursor-pointer ${
+              activeEngine === 'DEUS'
+                ? 'bg-amber-400 text-neutral-950 font-bold shadow-xs'
+                : 'text-neutral-400 hover:text-white'
+            }`}
+            title="Deus Epistemic AI (Deterministic Engine)"
+          >
+            <Cpu className="w-3.5 h-3.5" />
+            <span className="hidden xs:inline">Deus AI</span>
+            <span className="xs:hidden">Deus</span>
+          </button>
+        </div>
 
         {/* User Color Switcher Pill */}
         <div className="flex items-center bg-neutral-900 border border-neutral-800 rounded-lg p-0.5 text-xs font-mono">
@@ -115,6 +168,15 @@ export const TopNav: React.FC<TopNavProps> = ({
           >
             <Flame className="w-4 h-4 text-rose-500 animate-pulse" />
             <span>Tes Ekstrem</span>
+          </button>
+        )}
+        {onScrollToArena && (
+          <button
+            onClick={onScrollToArena}
+            className="text-amber-400 hover:text-amber-300 flex items-center gap-1.5 transition-colors cursor-pointer font-semibold"
+          >
+            <Swords className="w-4 h-4 text-amber-500 animate-pulse" />
+            <span>Arena 1000 Duel</span>
           </button>
         )}
         <button

@@ -2,15 +2,78 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { Chess, Square, PieceSymbol, Color, Move } from 'chess.js';
 import { ChessBoard, BoardTheme } from './components/ChessBoard';
 import { EpistemicHud } from './components/EpistemicHud';
-import { TopNav } from './components/TopNav';
+import { TopNav, ActiveEngine } from './components/TopNav';
 import { EvaluationBar } from './components/EvaluationBar';
 import { MoveHistory } from './components/MoveHistory';
 import { CapturedPieces } from './components/CapturedPieces';
 import { PhilosophyModal, RulesModal } from './components/InfoModals';
 import { ExtremeStressModal } from './components/ExtremeStressModal';
+import { ArenaDuelDashboard } from './components/ArenaDuelDashboard';
 import { epistemicEngine, EpistemicEvaluation, GameDifficulty } from './engine/chessEngine';
+import { stockfishService, StockfishEvaluation } from './engine/stockfishService';
 import { soundManager } from './audio/soundEffects';
 import { Trophy } from 'lucide-react';
+
+function convertStockfishToEpistemic(
+  sfEval: StockfishEvaluation,
+  chessInstance: Chess,
+  humanColor: Color
+): EpistemicEvaluation {
+  const currentTurn = chessInstance.turn();
+  const cp = sfEval.scoreCentipawns;
+  const humanAdvantage = currentTurn === humanColor ? cp : -cp;
+  const clampedAdv = Math.max(-2000, Math.min(2000, humanAdvantage));
+  const humanWinProb = 1 / (1 + Math.pow(10, -clampedAdv / 400));
+  const humanWinProbability = Number((humanWinProb * 100).toFixed(2));
+  const godWinProbability = Number((100 - humanWinProbability).toFixed(2));
+
+  let moveObj: Move | null = null;
+  if (sfEval.from && sfEval.to) {
+    const legalMoves = chessInstance.moves({ verbose: true });
+    moveObj =
+      legalMoves.find(
+        m =>
+          m.from === sfEval.from &&
+          m.to === sfEval.to &&
+          (!sfEval.promotion || m.promotion === sfEval.promotion)
+      ) || null;
+  }
+
+  const mateNote =
+    sfEval.mateInMoves !== undefined
+      ? `Forced Mate dalam ${Math.abs(sfEval.mateInMoves)} langkah!`
+      : '';
+
+  return {
+    bestMove: sfEval.bestMove || '',
+    bestMoveObj: moveObj,
+    evalCentipawns: cp,
+    depth: sfEval.depth || 10,
+    qDepth: 0,
+    nodesSearched: sfEval.nodes || 0,
+    projectedNodes: (sfEval.nodes || 1000) * 1500,
+    searchTimeMs: 400,
+    knps: Math.round((sfEval.nps || 0) / 1000),
+    principalVariation: sfEval.pv || [],
+    humanWinProbability,
+    godWinProbability,
+    boardEntropy: 0.15,
+    branchesPruned: Math.round((sfEval.nodes || 0) * 0.8),
+    coldThought: mateNote
+      ? `Stockfish 10+ UCI: ${mateNote} Varian taktis deterministik.`
+      : `Stockfish 10+ UCI: Memindai kedalaman ${sfEval.depth || 10} ply (${(sfEval.nodes || 0).toLocaleString()} node) dengan presisi Grandmaster FIDE.`,
+    isGeniusTrap: false,
+    dynamicScaling: {
+      tier: 'STANDARD',
+      label: `Stockfish 10+ UCI (Depth ${sfEval.depth || 10})`,
+      badgeText: `⚡ STOCKFISH UCI D${sfEval.depth || 10}`,
+      badgeColor: 'cyan',
+      depth: sfEval.depth || 10,
+      qDepth: 0,
+      reason: 'Ditenagai langsung oleh Stockfish WebAssembly/WebWorker Engine berstandar FIDE GM.',
+    },
+  };
+}
 
 export default function App() {
   const [chess] = useState(() => new Chess());
@@ -116,9 +179,39 @@ export default function App() {
 
   // Update evaluation
   const updateEvaluation = useCallback(() => {
-    const evalData = epistemicEngine.evaluateAndSearch(chess, difficulty);
-    setEvaluation(evalData);
-  }, [chess, difficulty]);
+    if (difficulty === 'STOCKFISH') {
+      stockfishService.search(chess.fen(), 10, 500).then(sfEval => {
+        if (sfEval.bestMove) {
+          setEvaluation(convertStockfishToEpistemic(sfEval, chess, humanColor));
+        } else {
+          const evalData = epistemicEngine.evaluateAndSearch(chess, 'GOD');
+          setEvaluation(evalData);
+        }
+      });
+    } else if (difficulty === 'DEUS_EX_MACHINA') {
+      // Hybrid evaluation: Deus Epistemic + Stockfish telemetry
+      const epistemicEval = epistemicEngine.evaluateAndSearch(chess, 'DEUS_EX_MACHINA');
+      stockfishService.search(chess.fen(), 10, 400).then(sfEval => {
+        if (sfEval.scoreCentipawns) {
+          // Merge centipawns
+          const blendedScore = Math.round(
+            epistemicEval.evalCentipawns * 0.45 + sfEval.scoreCentipawns * 0.55
+          );
+          setEvaluation({
+            ...epistemicEval,
+            evalCentipawns: blendedScore,
+            nodesSearched: epistemicEval.nodesSearched + (sfEval.nodes || 50000),
+            projectedNodes: 9999000000000,
+          });
+        } else {
+          setEvaluation(epistemicEval);
+        }
+      });
+    } else {
+      const evalData = epistemicEngine.evaluateAndSearch(chess, difficulty);
+      setEvaluation(evalData);
+    }
+  }, [chess, difficulty, humanColor]);
 
   // Initial evaluation on mount or difficulty change
   useEffect(() => {
@@ -129,8 +222,138 @@ export default function App() {
   const triggerAiMove = useCallback(() => {
     if (chess.isGameOver()) return;
 
-    // NOW Deus begins contemplating, showing the calculation state only after user's piece has visibly settled
     setIsCalculating(true);
+
+    if (difficulty === 'DEUS_EX_MACHINA') {
+      // DEUS EX MACHINA ☠️ HYBRID ARBITRATION:
+      // Computes both Deus (tactics & traps) and Stockfish (pure precision).
+      // If Deus finds an active tactical trap / sacrifice, Deus takes command!
+      // Otherwise, if in endgame or cold defense, Stockfish's flawless line is executed.
+      const deusEval = epistemicEngine.evaluateAndSearch(chess, 'DEUS_EX_MACHINA');
+
+      stockfishService.search(chess.fen(), 12, 800).then(sfEval => {
+        const legalMoves = chess.moves({ verbose: true });
+        let chosenMove: Move | null = null;
+
+        if (deusEval.isGeniusTrap && deusEval.bestMoveObj) {
+          // Deus trap prioritized
+          chosenMove = deusEval.bestMoveObj;
+        } else if (sfEval.from && sfEval.to) {
+          chosenMove =
+            legalMoves.find(
+              m =>
+                m.from === sfEval.from &&
+                m.to === sfEval.to &&
+                (!sfEval.promotion || m.promotion === sfEval.promotion)
+            ) || null;
+        }
+
+        const finalMove = chosenMove || deusEval.bestMoveObj || legalMoves[0];
+        setEvaluation(deusEval);
+
+        if (finalMove) {
+          const moveRes = chess.move(finalMove);
+          if (moveRes) {
+            if (deusEval.isGeniusTrap) {
+              soundManager.playTrapOrGambit();
+            } else if (moveRes.captured) {
+              soundManager.playSlash();
+            } else {
+              soundManager.playGodMove();
+            }
+            if (chess.inCheck()) {
+              soundManager.playCheck();
+            }
+
+            setLastMove({ from: moveRes.from as Square, to: moveRes.to as Square });
+            const newHist = chess.history();
+            setFullMoveHistory(newHist);
+            setCurrentMoveIndex(newHist.length - 1);
+            setBoardVersion(v => v + 1);
+
+            if (deusEval.principalVariation && deusEval.principalVariation.length > 1) {
+              const nextSan = deusEval.principalVariation[1];
+              const nextMoves = chess.moves({ verbose: true });
+              const foundNext = nextMoves.find(m => m.san === nextSan);
+              if (foundNext) {
+                setInevitableMove({
+                  from: foundNext.from as Square,
+                  to: foundNext.to as Square,
+                });
+              }
+            }
+
+            if (chess.isGameOver()) {
+              const isWin = chess.isCheckmate() && chess.turn() !== humanColor;
+              soundManager.playGameOver(isWin);
+            }
+          }
+        }
+        setIsCalculating(false);
+      });
+      return;
+    }
+
+    if (difficulty === 'STOCKFISH') {
+      stockfishService.search(chess.fen(), 12, 1000).then(sfEval => {
+        let chosenMove: Move | null = null;
+        if (sfEval.from && sfEval.to) {
+          const legalMoves = chess.moves({ verbose: true });
+          chosenMove =
+            legalMoves.find(
+              m =>
+                m.from === sfEval.from &&
+                m.to === sfEval.to &&
+                (!sfEval.promotion || m.promotion === sfEval.promotion)
+            ) || null;
+        }
+
+        // Fallback to internal engine if worker didn't provide a valid move
+        const fallbackEval = epistemicEngine.evaluateAndSearch(chess, 'GOD');
+        const finalMove = chosenMove || fallbackEval.bestMoveObj;
+        const finalEval = chosenMove
+          ? convertStockfishToEpistemic(sfEval, chess, humanColor)
+          : fallbackEval;
+
+        setEvaluation(finalEval);
+
+        if (finalMove) {
+          const moveRes = chess.move(finalMove);
+          if (moveRes) {
+            if (moveRes.captured) {
+              soundManager.playSlash();
+            } else {
+              soundManager.playGodMove();
+            }
+            if (chess.inCheck()) {
+              soundManager.playCheck();
+            }
+
+            setLastMove({ from: moveRes.from as Square, to: moveRes.to as Square });
+            const newHist = chess.history();
+            setFullMoveHistory(newHist);
+            setCurrentMoveIndex(newHist.length - 1);
+            setBoardVersion(v => v + 1);
+
+            // Predict opponent countermove from PV
+            if (sfEval.pv && sfEval.pv.length > 1) {
+              const nextUci = sfEval.pv[1];
+              const fromSq = nextUci.slice(0, 2) as Square;
+              const toSq = nextUci.slice(2, 4) as Square;
+              setInevitableMove({ from: fromSq, to: toSq });
+            }
+
+            if (chess.isGameOver()) {
+              const isWin = chess.isCheckmate() && chess.turn() !== humanColor;
+              soundManager.playGameOver(isWin);
+            }
+          }
+        }
+        setIsCalculating(false);
+      });
+      return;
+    }
+
     const delay = isGodMode ? 600 : 380;
 
     setTimeout(() => {
@@ -311,7 +534,31 @@ export default function App() {
   const handleSelectDifficulty = (d: GameDifficulty) => {
     setDifficulty(d);
     setIsGodMode(d === 'GOD');
-    if (d === 'GOD') {
+    if (d === 'GOD' || d === 'STOCKFISH') {
+      soundManager.playGodModeActivation(true);
+    }
+    setTimeout(updateEvaluation, 50);
+  };
+
+  const activeEngine: ActiveEngine =
+    difficulty === 'DEUS_EX_MACHINA'
+      ? 'DEUS_EX_MACHINA'
+      : difficulty === 'STOCKFISH'
+      ? 'STOCKFISH'
+      : 'DEUS';
+
+  const handleSelectEngine = (engine: ActiveEngine) => {
+    if (engine === 'DEUS_EX_MACHINA') {
+      setDifficulty('DEUS_EX_MACHINA');
+      setIsGodMode(true);
+      soundManager.playGodModeActivation(true);
+    } else if (engine === 'STOCKFISH') {
+      setDifficulty('STOCKFISH');
+      setIsGodMode(true);
+      soundManager.playGodModeActivation(true);
+    } else {
+      setDifficulty('GOD');
+      setIsGodMode(true);
       soundManager.playGodModeActivation(true);
     }
     setTimeout(updateEvaluation, 50);
@@ -437,6 +684,24 @@ export default function App() {
     }
   };
 
+  // Load a completed Arena game onto the interactive chessboard
+  const handleLoadArenaGame = (fen: string) => {
+    try {
+      chess.load(fen);
+      const moves = chess.history();
+      setFullMoveHistory(moves);
+      setCurrentMoveIndex(moves.length - 1);
+      setLastMove(null);
+      setInevitableMove(null);
+      setBoardVersion(v => v + 1);
+      soundManager.playGodMove();
+      updateEvaluation();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (e) {
+      console.error('Gagal memuat laga arena ke papan', e);
+    }
+  };
+
   // Flip Board
   const handleFlipBoard = () => {
     setIsFlipped(f => !f);
@@ -453,9 +718,47 @@ export default function App() {
     });
   };
 
-  // AI Takeover (God Mode executes 1 move for human)
-  const handleAiTakeover = () => {
+  // AI Takeover (God Mode or Stockfish executes 1 move for human)
+  const handleAiTakeover = async () => {
     if (isCalculating || chess.isGameOver()) return;
+
+    if (difficulty === 'STOCKFISH') {
+      setIsCalculating(true);
+      const sfEval = await stockfishService.search(chess.fen(), 12, 800);
+      let chosenMove: Move | null = null;
+      if (sfEval.from && sfEval.to) {
+        const legalMoves = chess.moves({ verbose: true });
+        chosenMove =
+          legalMoves.find(
+            m =>
+              m.from === sfEval.from &&
+              m.to === sfEval.to &&
+              (!sfEval.promotion || m.promotion === sfEval.promotion)
+          ) || null;
+      }
+      setIsCalculating(false);
+
+      if (chosenMove) {
+        const moveRes = chess.move(chosenMove);
+        if (moveRes) {
+          if (moveRes.captured) soundManager.playCapture();
+          else soundManager.playMove();
+          if (chess.inCheck()) soundManager.playCheck();
+
+          const updatedHistory = chess.history();
+          setFullMoveHistory(updatedHistory);
+          setCurrentMoveIndex(updatedHistory.length - 1);
+          setLastMove({ from: moveRes.from as Square, to: moveRes.to as Square });
+          setBoardVersion(v => v + 1);
+
+          if (!chess.isGameOver()) {
+            triggerAiMove();
+          }
+          return;
+        }
+      }
+    }
+
     const evalData = epistemicEngine.evaluateAndSearch(chess, 'GOD');
     if (evalData.bestMoveObj) {
       const moveRes = chess.move(evalData.bestMoveObj);
@@ -564,11 +867,17 @@ export default function App() {
         onOpenRules={() => setShowRules(true)}
         onOpenPhilosophy={() => setShowPhilosophy(true)}
         onOpenStressTest={() => setShowStressModal(true)}
+        onScrollToArena={() => {
+          const el = document.getElementById('arena-duel-section');
+          if (el) el.scrollIntoView({ behavior: 'smooth' });
+        }}
         humanColor={humanColor}
         onSelectColor={handleSelectHumanColor}
         userControlsDeusFirstMove={userControlsDeusFirstMove}
         onToggleUserControlsDeusFirstMove={handleToggleUserControlsDeusFirstMove}
         deusFirstMoveExecuted={deusFirstMoveExecuted}
+        activeEngine={activeEngine}
+        onSelectEngine={handleSelectEngine}
       />
 
       {/* Main Chess Arena */}
@@ -620,7 +929,11 @@ export default function App() {
                   }`}
                 />
                 <span className="font-semibold text-white">
-                  {isGodMode ? 'DEUS (Pikiran Tuhan)' : `AI (${difficulty})`}
+                  {difficulty === 'STOCKFISH'
+                    ? 'STOCKFISH 10+ (Grandmaster UCI)'
+                    : isGodMode
+                    ? 'DEUS (Pikiran Tuhan)'
+                    : `AI (${difficulty})`}
                 </span>
                 {isCalculating && (
                   <span className="text-[10px] text-amber-400 animate-pulse font-mono">
@@ -692,6 +1005,8 @@ export default function App() {
               onToggleDivineHint={() => setShowDivineHint(s => !s)}
               onAiTakeover={handleAiTakeover}
               onOpenStressTest={() => setShowStressModal(true)}
+              activeEngine={activeEngine}
+              onSelectEngine={handleSelectEngine}
             />
 
             {/* Move Notation & Step-by-Step History Navigation */}
@@ -707,6 +1022,27 @@ export default function App() {
           </div>
         </div>
       </main>
+
+      {/* Universal Mega Arena & Multi-Engine Tournament Dashboard */}
+      <ArenaDuelDashboard
+        onLoadGameToBoard={handleLoadArenaGame}
+        onSelectEngineForMainGame={(engine) => {
+          if (engine === 'DEUS_EX_MACHINA') {
+            handleSelectDifficulty('DEUS_EX_MACHINA');
+          } else if (engine === 'STOCKFISH') {
+            handleSelectDifficulty('STOCKFISH');
+          } else if (engine === 'DEUS') {
+            handleSelectDifficulty('GOD');
+          } else if (engine === 'GRANDMASTER') {
+            handleSelectDifficulty('GRANDMASTER');
+          } else if (engine === 'CLUB') {
+            handleSelectDifficulty('CLUB');
+          } else {
+            handleSelectDifficulty('NOVICE');
+          }
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }}
+      />
 
       {/* Modals */}
       <PhilosophyModal isOpen={showPhilosophy} onClose={() => setShowPhilosophy(false)} />
